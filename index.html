@@ -30,7 +30,7 @@ if (!CONFIG_FILLED) {
 } else {
   try {
     const { initializeApp } = await import('https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js');
-    const { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot }
+    const { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, getDoc }
       = await import('https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js');
 
     const app = initializeApp(FIREBASE_CONFIG);
@@ -99,17 +99,34 @@ if (!CONFIG_FILLED) {
         }
       );
 
-      // Products — live listener
+      // Products — immediate fetch first, then live listener
+      const productsDocRef = doc(db, 'meta', 'products');
+
+      // Fetch immediately on load so other devices get products right away
+      getDoc(productsDocRef).then(function(snap) {
+        if (snap.exists()) {
+          const products = snap.data().list || [];
+          window._state.products = products;
+          localStorage.setItem('pt_products_v1', JSON.stringify(products));
+          window._render();
+        }
+      }).catch(function(e){ console.warn('getDoc products error:', e); });
+
+      // Then keep listening for any future changes (e.g. when another device uploads)
       onSnapshot(
-        doc(db, 'meta', 'products'),
+        productsDocRef,
         function(snapshot) {
           if (snapshot.exists()) {
             const products = snapshot.data().list || [];
-            window._state.products = products;
-            localStorage.setItem('pt_products_v1', JSON.stringify(products));
-            window._render(); // always re-render so product list shows on all devices
+            // Only update if different from current
+            const current = JSON.stringify(window._state.products);
+            const incoming = JSON.stringify(products);
+            if (current !== incoming) {
+              window._state.products = products;
+              localStorage.setItem('pt_products_v1', JSON.stringify(products));
+              window._render();
+            }
           } else {
-            // Document does not exist yet — products not uploaded yet, that is fine
             window._state.products = [];
           }
         },
@@ -301,7 +318,7 @@ if (!CONFIG_FILLED) {
     </div>
     <div>
       <span class="brand-name">PurchaseTracker</span>
-      <span class="brand-tag">v13.0</span>
+      <span class="brand-tag">v14.0</span>
     </div>
   </div>
   <span id="sync-badge" class="sync-badge offline">● Offline</span>
@@ -358,7 +375,14 @@ function _setSyncStatus(status) {
 window._setSyncStatus = _setSyncStatus;
 function saveProducts() {
   localStorage.setItem(PM_KEY, JSON.stringify(state.products));
-  if (window._fbSaveProducts) window._fbSaveProducts(state.products);
+  // Push to Firebase — retry once if not ready yet
+  if (window._fbSaveProducts) {
+    window._fbSaveProducts(state.products);
+  } else {
+    setTimeout(function() {
+      if (window._fbSaveProducts) window._fbSaveProducts(state.products);
+    }, 2000);
+  }
 }
 function getFY() {
   // Financial year: April to March
