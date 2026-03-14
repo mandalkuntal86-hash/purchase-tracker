@@ -8,13 +8,9 @@
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script type="module">
 // ════════════════════════════════════════════════════
-//  FIREBASE CONFIG — paste your config from Firebase
-//  Console → Project Settings → Your apps → Config
+//  FIREBASE CONFIG — paste your values here
+//  Firebase Console → Project Settings → Your Apps → Config
 // ════════════════════════════════════════════════════
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
-import { getFirestore, collection, getDocs, doc, setDoc, deleteDoc, onSnapshot }
-  from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
-
 const firebaseConfig = {
   apiKey: "AIzaSyAW2iimA7WhA86WTWPpZDLD1axhmy7n_XY",
   authDomain: "eldo-purchase-tracker.firebaseapp.com",
@@ -23,72 +19,110 @@ const firebaseConfig = {
   messagingSenderId: "1022915600336",
   appId: "1:1022915600336:web:bc36fa1488d77c137523d5"
 };
-let db = null;
-let firestoreReady = false;
+// ════════════════════════════════════════════════════
 
-try {
-  const app = initializeApp(FIREBASE_CONFIG);
-  db = getFirestore(app);
-  firestoreReady = true;
-} catch(e) {
-  console.warn('Firebase init failed:', e.message);
+// Check config is filled
+const CONFIG_FILLED = FIREBASE_CONFIG.apiKey !== "YOUR_API_KEY" && FIREBASE_CONFIG.projectId !== "YOUR_PROJECT_ID";
+
+if (!CONFIG_FILLED) {
+  window._firestoreReady = false;
+  window._fbNotConfigured = true;
+} else {
+  try {
+    const { initializeApp } = await import('https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js');
+    const { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot }
+      = await import('https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js');
+
+    const app = initializeApp(FIREBASE_CONFIG);
+    const db  = getFirestore(app);
+
+    window._firestoreReady = true;
+
+    // ── Save order ──
+    window._fbSaveOrder = async function(order) {
+      try {
+        window._setSyncStatus('syncing');
+        const key = order.id.replace(/\//g, '-');
+        await setDoc(doc(db, 'orders', key), order);
+        window._setSyncStatus('synced');
+      } catch(e) {
+        console.error('Save error:', e);
+        window._setSyncStatus('error');
+        window._showSyncErrorHint(e.code || e.message);
+      }
+    };
+
+    // ── Delete order ──
+    window._fbDeleteOrder = async function(id) {
+      try {
+        window._setSyncStatus('syncing');
+        const key = id.replace(/\//g, '-');
+        await deleteDoc(doc(db, 'orders', key));
+        window._setSyncStatus('synced');
+      } catch(e) {
+        console.error('Delete error:', e);
+        window._setSyncStatus('error');
+      }
+    };
+
+    // ── Save products ──
+    window._fbSaveProducts = async function(products) {
+      try {
+        await setDoc(doc(db, 'meta', 'products'), { list: products });
+      } catch(e) { console.error('Products save error:', e); }
+    };
+
+    // ── Real-time listener ──
+    window._startFirestoreSync = function() {
+      window._setSyncStatus('connecting');
+
+      // Orders — live listener
+      onSnapshot(
+        collection(db, 'orders'),
+        function(snapshot) {
+          const orders = [];
+          snapshot.forEach(function(d) { orders.push(d.data()); });
+          orders.sort(function(a, b) {
+            const na = parseInt((a.id.match(/(\d+)$/) || [0,0])[1], 10);
+            const nb = parseInt((b.id.match(/(\d+)$/) || [0,0])[1], 10);
+            return nb - na;
+          });
+          window._state.orders = orders;
+          localStorage.setItem('pt_orders_v3', JSON.stringify(orders));
+          window._setSyncStatus('synced');
+          if (window._state.view === 'list') window._render();
+        },
+        function(err) {
+          console.error('Listener error:', err);
+          window._setSyncStatus('error');
+          window._showSyncErrorHint(err.code || err.message);
+        }
+      );
+
+      // Products — live listener
+      onSnapshot(
+        doc(db, 'meta', 'products'),
+        function(snapshot) {
+          if (snapshot.exists()) {
+            const products = snapshot.data().list || [];
+            window._state.products = products;
+            localStorage.setItem('pt_products_v1', JSON.stringify(products));
+            if (window._state.view === 'list') window._render();
+          }
+        },
+        function(err) { console.error('Products listener error:', err); }
+      );
+    };
+
+    // Start sync immediately
+    window._startFirestoreSync();
+
+  } catch(e) {
+    console.error('Firebase load error:', e);
+    window._firestoreReady = false;
+    window._setSyncStatus && window._setSyncStatus('error');
+  }
 }
-
-// ── Firestore helpers ──
-window._fbSaveOrder = async function(order) {
-  if (!db) return;
-  try {
-    await setDoc(doc(db, 'orders', order.id), order);
-    window._setSyncStatus('synced');
-  } catch(e) { console.error('Firestore save error:', e); window._setSyncStatus('error'); }
-};
-
-window._fbDeleteOrder = async function(id) {
-  if (!db) return;
-  try {
-    await deleteDoc(doc(db, 'orders', id));
-    window._setSyncStatus('synced');
-  } catch(e) { console.error('Firestore delete error:', e); window._setSyncStatus('error'); }
-};
-
-window._fbSaveProducts = async function(products) {
-  if (!db) return;
-  try {
-    await setDoc(doc(db, 'meta', 'products'), { list: products });
-  } catch(e) { console.error('Firestore products save error:', e); }
-};
-
-// ── Real-time listener: sync Firestore → local state ──
-window._startFirestoreSync = function() {
-  if (!db) return;
-  window._setSyncStatus('connecting');
-
-  // Orders collection
-  onSnapshot(collection(db, 'orders'), function(snapshot) {
-    const orders = [];
-    snapshot.forEach(function(d) { orders.push(d.data()); });
-    // Sort by id descending (newest first)
-    orders.sort(function(a,b){ return b.id > a.id ? 1 : -1; });
-    window._state.orders = orders;
-    localStorage.setItem('pt_orders_v3', JSON.stringify(orders));
-    window._setSyncStatus('synced');
-    if (window._state.view === 'list') window._render();
-  }, function(err) { console.error('Firestore orders listener error:', err); window._setSyncStatus('error'); });
-
-  // Products doc
-  onSnapshot(doc(db, 'meta', 'products'), function(snapshot) {
-    if (snapshot.exists()) {
-      const products = snapshot.data().list || [];
-      window._state.products = products;
-      localStorage.setItem('pt_products_v1', JSON.stringify(products));
-      if (window._state.view === 'list') window._render();
-    }
-  });
-};
-
-// Expose readiness flag
-window._firestoreReady = firestoreReady;
-window._db = db;
 </script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -264,7 +298,7 @@ window._db = db;
     </div>
     <div>
       <span class="brand-name">PurchaseTracker</span>
-      <span class="brand-tag">v9.0</span>
+      <span class="brand-tag">v12.0</span>
     </div>
   </div>
   <span id="sync-badge" class="sync-badge offline">● Offline</span>
@@ -299,6 +333,18 @@ function save(changedOrder) {
     window._fbSaveOrder(changedOrder);
   }
 }
+function _showSyncErrorHint(code) {
+  const badge = document.getElementById('sync-badge');
+  if (!badge) return;
+  let tip = 'Sync Error';
+  if (code && code.includes('permission')) tip = 'Sync Error — Fix Firestore Rules';
+  if (code && code.includes('unavailable')) tip = 'No Internet';
+  if (code && code.includes('not-found')) tip = 'DB Not Found';
+  badge.title = code || 'unknown error';
+  badge.textContent = '● ' + tip;
+}
+window._showSyncErrorHint = _showSyncErrorHint;
+
 function _setSyncStatus(status) {
   const el = document.getElementById('sync-badge');
   if (!el) return;
@@ -980,12 +1026,7 @@ function clearProducts() {
 
 render();
 
-// Start Firebase real-time sync after a short delay (module may still be loading)
-setTimeout(function() {
-  if (window._startFirestoreSync) {
-    window._startFirestoreSync();
-  }
-}, 800);
+// Firebase sync is now started inside the module script above automatically
 </script>
 </body>
 </html>
