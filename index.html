@@ -107,7 +107,10 @@ if (!CONFIG_FILLED) {
             const products = snapshot.data().list || [];
             window._state.products = products;
             localStorage.setItem('pt_products_v1', JSON.stringify(products));
-            if (window._state.view === 'list') window._render();
+            window._render(); // always re-render so product list shows on all devices
+          } else {
+            // Document does not exist yet — products not uploaded yet, that is fine
+            window._state.products = [];
           }
         },
         function(err) { console.error('Products listener error:', err); }
@@ -298,7 +301,7 @@ if (!CONFIG_FILLED) {
     </div>
     <div>
       <span class="brand-name">PurchaseTracker</span>
-      <span class="brand-tag">v12.0</span>
+      <span class="brand-tag">v13.0</span>
     </div>
   </div>
   <span id="sync-badge" class="sync-badge offline">● Offline</span>
