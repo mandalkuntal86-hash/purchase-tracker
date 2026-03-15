@@ -75,8 +75,12 @@ if (!CONFIG_FILLED) {
     // ── Save employees ──
     window._fbSaveEmployees = async function(employees) {
       try {
+        // Save as a single doc in 'meta' collection
         await setDoc(doc(db, 'meta', 'employees'), { list: employees });
-      } catch(e) { console.error('Employees save error:', e); }
+        console.log('Employees saved to Firestore:', employees.length);
+      } catch(e) {
+        console.error('Employees save error:', e.code, e.message);
+      }
     };
 
     // ── Real-time listener ──
@@ -593,12 +597,17 @@ function renderEmpMgmt() {
     listHtml = '<div class="emp-list">' + rows + '</div>';
   }
 
+  var fbStatus = window._firestoreReady
+    ? '<div style="font-size:12px;background:#E1F5EE;color:#0F6E56;border-radius:8px;padding:7px 12px;margin-bottom:1rem;display:flex;align-items:center;gap:6px;">&#9679; Firebase connected — employees sync to all devices</div>'
+    : '<div style="font-size:12px;background:#FCEBEB;color:#A32D2D;border-radius:8px;padding:7px 12px;margin-bottom:1rem;display:flex;align-items:center;gap:6px;">&#9888; Firebase not connected — employees saved locally only</div>';
+
   overlay.innerHTML = '<div class="emp-mgmt-modal">'
     + '<div class="emp-mgmt-head">'
     + '<div class="emp-mgmt-title">&#128100; Employee Management</div>'
     + '<button class="emp-mgmt-close" onclick="closeEmpMgmt()">&times;</button>'
     + '</div>'
     + '<div class="emp-mgmt-body">'
+    + fbStatus
     + '<div style="font-size:13px;color:#6B6A66;margin-bottom:1rem;">Employee names appear as dropdown options in Ordered By, Cancelled By, Received By, and Checked By fields.</div>'
     + listHtml
     + '<div style="font-size:12px;font-weight:600;color:#6B6A66;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;">Add New Employee</div>'
@@ -708,13 +717,19 @@ function saveProducts() {
 }
 function saveEmployees() {
   localStorage.setItem(EMP_KEY, JSON.stringify(state.employees));
-  if (window._fbSaveEmployees) {
-    window._fbSaveEmployees(state.employees);
-  } else {
-    setTimeout(function() {
-      if (window._fbSaveEmployees) window._fbSaveEmployees(state.employees);
-    }, 2000);
+  // Retry until Firebase module is ready (it loads async)
+  var attempts = 0;
+  function tryFbSave() {
+    if (window._fbSaveEmployees) {
+      window._fbSaveEmployees(state.employees);
+    } else if (attempts < 20) {
+      attempts++;
+      setTimeout(tryFbSave, 500);
+    } else {
+      console.warn('Firebase not ready after 10s — employees saved locally only');
+    }
   }
+  tryFbSave();
 }
 function getFY() {
   // Financial year: April to March
