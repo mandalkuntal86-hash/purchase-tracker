@@ -1241,8 +1241,10 @@ function getStatus(o) {
   return { label: 'Pending', cls: 's-pending' };
 }
 function getCounts() {
-  const c = { all: state.orders.length, pending: 0, ordered: 0, received: 0, cancelled: 0 };
-  state.orders.forEach(o => { const lbl = getStatus(o).label.toLowerCase(); if (c[lbl] !== undefined) c[lbl]++; });
+  // Exclude orders merged/bundled into another order — they are not independent rows
+  const visible = state.orders.filter(function(o) { return !(o.step2 && o.step2.mergedInto); });
+  const c = { all: visible.length, pending: 0, ordered: 0, received: 0, cancelled: 0 };
+  visible.forEach(o => { const lbl = getStatus(o).label.toLowerCase(); if (c[lbl] !== undefined) c[lbl]++; });
   return c;
 }
 
@@ -1267,6 +1269,8 @@ function renderList() {
   }).join('');
 
   const filtered = state.orders.filter(function(o) {
+    // Hide orders that were merged/bundled into another order — shown inside parent
+    if (o.step2 && o.step2.mergedInto) return false;
     if (state.tab !== 'all' && getStatus(o).label.toLowerCase() !== state.tab) return false;
     if (state.dateFrom && o.step1.date < state.dateFrom) return false;
     if (state.dateTo && o.step1.date > state.dateTo) return false;
@@ -1299,9 +1303,13 @@ function renderList() {
         const editS3 = isViewOnly ? '' : (o.step3 ? (s3Locked ? lockIcon : '<button class="btn btn-sm btn-edit btn-ghost" onclick="goEditStep3(\'' + o.id + '\')" title="Edit Step 3">&#9998; S3</button>') : '');
         const delBtn = state.adminLoggedIn ? '<button class="btn btn-sm btn-danger btn-ghost" onclick="deleteOrder(\'' + o.id + '\')">&#128465; Delete</button>' : '';
 
+                var bundledCount = (o.step2 && o.step2.mergedFromIds && o.step2.mergedFromIds.length > 0) ? o.step2.mergedFromIds.length : 0;
+        var bundledBadge = bundledCount > 0
+          ? ' <span title="' + bundledCount + ' additional request(s) bundled" style="font-size:10px;font-weight:600;padding:2px 6px;border-radius:20px;background:var(--blue-light);color:var(--blue);white-space:nowrap;margin-left:4px;">+' + bundledCount + ' bundled</span>'
+          : '';
         rows += '<tr>'
           + '<td><span class="order-id">' + esc(o.id) + '</span></td>'
-          + '<td><span class="product-name">' + esc(o.step1.productName) + '</span></td>'
+          + '<td><span class="product-name">' + esc(o.step1.productName) + '</span>' + bundledBadge + '</td>'
           + '<td style="color:var(--text-secondary)">' + esc(o.step1.date) + '</td>'
           + '<td><span class="status-pill ' + s.cls + '"><span class="status-dot"></span>' + s.label + '</span></td>'
           + '<td>' + nextBtn + '</td>'
@@ -1434,26 +1442,250 @@ function renderStep1Edit() {
 function renderStep2() {
   const o = state.orders.find(x => x.id === state.editId);
   const autoName = state.loggedInEmployee || '';
+  // Pre-fill first item product from step1
+  const defaultItems = [{ product: o.step1.productName || '', qty: '', rate: '', notes2: '', fromOrderId: o.id }];
   return stepperHtml(2, false)
     + '<div class="form-section">'
     + '<div class="form-section-header"><span class="step-badge sb-2">Step 2</span><span class="form-section-title">Order Details</span></div>'
     + '<div class="order-ref">Order <strong>' + esc(o.id) + '</strong> &mdash; ' + esc(o.step1.productName) + '</div>'
-    + step2Fields(autoName, '', '', '', '', '', false, o.cancelled||null) + '</div>';
+    + pendingRequestsPanel(o.id)
+    + step2Fields(autoName, '', defaultItems, '', '', false, o.cancelled||null) + '</div>';
+}
+
+// ── PENDING REQUESTS PICKER PANEL ──
+function pendingRequestsPanel(currentOrderId) {
+  // All pending orders (step1 done, no step2, not cancelled) except the current one
+  var pending = state.orders.filter(function(x) {
+    return x.id !== currentOrderId && !x.step2 && !x.cancelled;
+  });
+  if (pending.length === 0) return '';
+
+  var rows = pending.map(function(pr) {
+    var safeId = esc(pr.id);
+    var safeProd = esc(pr.step1.productName);
+    var safeDate = esc(pr.step1.date);
+    var safeBy   = esc(pr.step1.requestedBy || '');
+    return '<div id="pr-row-' + safeId + '" style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s;" '
+      + 'onclick="togglePendingReq(\'' + safeId + '\',\'' + safeProd.replace(/'/g,"\\'") + '\')"'
+      + ' onmouseover="this.style.background=\'var(--blue-light)\'" onmouseout="_prRowHoverOut(this,\'' + safeId + '\')">'
+      + '<div id="pr-chk-' + safeId + '" style="width:18px;height:18px;border:2px solid var(--border-strong);border-radius:5px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff;transition:all .12s;"></div>'
+      + '<div style="flex:1;min-width:0;">'
+      + '<div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + safeProd + '</div>'
+      + '<div style="font-size:11px;color:var(--text-secondary);margin-top:1px;">' + safeId + (safeBy ? ' &mdash; by ' + safeBy : '') + ' &mdash; ' + safeDate + '</div>'
+      + '</div>'
+      + '<span id="pr-badge-' + safeId + '" style="display:none;font-size:10px;font-weight:600;padding:2px 7px;border-radius:20px;background:var(--blue);color:#fff;white-space:nowrap;">Added</span>'
+      + '</div>';
+  }).join('');
+
+  return '<div style="background:var(--blue-light);border:1px solid rgba(24,95,165,0.2);border-radius:var(--radius-lg);margin-bottom:1.25rem;overflow:hidden;">'
+    + '<div style="display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid rgba(24,95,165,0.15);">'
+    + '<span style="font-size:15px;">📋</span>'
+    + '<div style="flex:1;">'
+    + '<div style="font-size:13px;font-weight:600;color:var(--blue);">Add from Pending Purchase Requests</div>'
+    + '<div style="font-size:11px;color:var(--blue);opacity:0.75;margin-top:1px;">' + pending.length + ' pending request' + (pending.length > 1 ? 's' : '') + ' — click to include in this order</div>'
+    + '</div>'
+    + '</div>'
+    + '<div style="max-height:220px;overflow-y:auto;">' + rows + '</div>'
+    + '</div>';
+}
+
+// Track which pending orders have been added to the current Step 2
+var _addedPendingReqs = {};  // { orderId: true }
+
+function togglePendingReq(orderId, productName) {
+  if (_addedPendingReqs[orderId]) {
+    // Remove it
+    delete _addedPendingReqs[orderId];
+    // Remove from _s2Items
+    _s2Items = _s2Items.filter(function(it) { return it.fromOrderId !== orderId; });
+    // Update checkbox UI
+    var chk = document.getElementById('pr-chk-' + orderId);
+    if (chk) { chk.style.background = ''; chk.style.borderColor = 'var(--border-strong)'; chk.innerHTML = ''; }
+    var badge = document.getElementById('pr-badge-' + orderId);
+    if (badge) badge.style.display = 'none';
+    var row = document.getElementById('pr-row-' + orderId);
+    if (row) row.style.background = '';
+  } else {
+    // Add it
+    _addedPendingReqs[orderId] = true;
+    _s2Items.push({ product: productName, qty: '', rate: '', notes2: '', fromOrderId: orderId });
+    // Update checkbox UI
+    var chk = document.getElementById('pr-chk-' + orderId);
+    if (chk) { chk.style.background = 'var(--blue)'; chk.style.borderColor = 'var(--blue)'; chk.innerHTML = '✓'; }
+    var badge = document.getElementById('pr-badge-' + orderId);
+    if (badge) badge.style.display = 'inline-block';
+    var row = document.getElementById('pr-row-' + orderId);
+    if (row) row.style.background = 'rgba(24,95,165,0.08)';
+  }
+  _renderS2Items();
+}
+
+function _prRowHoverOut(el, orderId) {
+  if (_addedPendingReqs[orderId]) {
+    el.style.background = 'rgba(24,95,165,0.08)';
+  } else {
+    el.style.background = '';
+  }
 }
 
 // ── STEP 2 EDIT ──
 function renderStep2Edit() {
   const o = state.orders.find(x => x.id === state.editId);
   const s2 = o.step2 || {};
+  // Support both old (single) and new (multi-item) format
+  var existingItems = s2.items && s2.items.length > 0
+    ? s2.items
+    : [{ product: o.step1.productName || '', qty: s2.qty||'', rate: s2.rate||'', notes2: s2.notes2||'' }];
   return stepperHtml(2, true)
     + '<div class="form-section">'
     + '<div class="form-section-header"><span class="step-badge sb-2">Step 2</span><span class="form-section-title">Edit Order Details</span><span class="edit-badge">&#9998; Editing</span></div>'
     + '<div class="order-ref">Editing order <strong>' + esc(o.id) + '</strong> &mdash; ' + esc(o.step1.productName) + '</div>'
-    + step2Fields(s2.orderedBy||'', s2.orderDate||'', s2.qty||'', s2.vendor||'', s2.rate||'', s2.notes2||'', true, o.cancelled||null) + '</div>';
+    + step2Fields(s2.orderedBy||'', s2.orderDate||'', existingItems, s2.vendor||'', s2.notes2Header||'', true, o.cancelled||null) + '</div>';
 }
 
-function step2Fields(orderedBy, orderDate, qty, vendor, rate, notes2, isEdit, cancelledInfo) {
-  // If currently cancelled, show banner at top
+// ── STEP 2 MULTI-ITEM STATE ──
+var _s2Items = []; // [{product, qty, rate, notes2}]
+
+function s2AddItem() {
+  _s2Items.push({ product: '', qty: '', rate: '', notes2: '' });
+  _renderS2Items();
+}
+
+function s2RemoveItem(idx) {
+  if (_s2Items.length <= 1) { showMsgBox('Cannot Remove', 'At least one item is required.', 'error'); return; }
+  _s2Items.splice(idx, 1);
+  _renderS2Items();
+}
+
+function s2ItemChange(idx, field, val) {
+  if (_s2Items[idx]) _s2Items[idx][field] = val;
+  // Update total
+  _updateS2Total();
+}
+
+function _updateS2Total() {
+  var total = 0;
+  _s2Items.forEach(function(it) {
+    var q = parseFloat(it.qty) || 0;
+    var r = parseFloat(it.rate) || 0;
+    total += q * r;
+  });
+  var el = document.getElementById('s2-grand-total');
+  if (el) el.textContent = total > 0 ? '₹' + total.toFixed(2) : '—';
+}
+
+function _renderS2Items() {
+  var wrap = document.getElementById('s2-items-wrap');
+  if (!wrap) return;
+  var dis = wrap.dataset.disabled === 'true';
+  var hasProducts = state.products.length > 0;
+
+  var html = '<table style="width:100%;border-collapse:collapse;">'
+    + '<thead><tr style="background:var(--surface2);">'
+    + '<th style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em;padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);width:35%;">Product / Item *</th>'
+    + '<th style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em;padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);width:12%;">Qty *</th>'
+    + '<th style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em;padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);width:14%;">Rate (₹) *</th>'
+    + '<th style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em;padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);width:14%;">Amount</th>'
+    + '<th style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em;padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);">Notes</th>'
+    + (!dis ? '<th style="border-bottom:1px solid var(--border);width:36px;"></th>' : '')
+    + '</tr></thead><tbody id="s2-items-tbody">';
+
+  _s2Items.forEach(function(it, idx) {
+    var amt = (parseFloat(it.qty)||0) * (parseFloat(it.rate)||0);
+    var amtStr = amt > 0 ? '₹' + amt.toFixed(2) : '—';
+    // Product cell — mini search if products loaded, else plain input
+    var productCell;
+    if (!dis && hasProducts) {
+      productCell = '<div style="position:relative;">'
+        + '<input type="text" class="form-input" style="font-size:13px;height:34px;" placeholder="Type to search..." value="' + esc(it.product) + '" autocomplete="off"'
+        + ' oninput="_s2ProdInput(this,' + idx + ')" onfocus="_s2ProdFocus(this,' + idx + ')" onkeydown="_s2ProdKeydown(event,this,' + idx + ')"'
+        + ' id="s2p-' + idx + '">'
+        + '<div id="s2dd-' + idx + '" style="display:none;position:absolute;top:calc(100% + 2px);left:0;right:0;background:#fff;border:1px solid var(--border-strong);border-radius:8px;z-index:400;max-height:160px;overflow-y:auto;box-shadow:0 4px 14px rgba(0,0,0,.10);"></div>'
+        + '</div>';
+    } else {
+      productCell = '<input type="text" class="form-input" style="font-size:13px;height:34px;" placeholder="Item name..." value="' + esc(it.product) + '"'
+        + (dis ? ' disabled style="opacity:0.5;font-size:13px;height:34px;"' : ' oninput="s2ItemChange(' + idx + ',\'product\',this.value)"')
+        + '>';
+    }
+
+    html += '<tr style="border-bottom:1px solid var(--border);" id="s2row-' + idx + '">'
+      + '<td style="padding:6px 8px;">' + productCell + '</td>'
+      + '<td style="padding:6px 8px;"><input type="number" class="form-input" style="font-size:13px;height:34px;" id="s2qty-' + idx + '" placeholder="0" min="1" value="' + esc(it.qty) + '" ' + (dis?'disabled style="opacity:0.5;font-size:13px;height:34px;"':'oninput="_s2NumChange(this,'+idx+',\'qty\')"') + '></td>'
+      + '<td style="padding:6px 8px;"><input type="number" class="form-input" style="font-size:13px;height:34px;" id="s2rate-' + idx + '" placeholder="0.00" min="0" step="0.01" value="' + esc(it.rate) + '" ' + (dis?'disabled style="opacity:0.5;font-size:13px;height:34px;"':'oninput="_s2NumChange(this,'+idx+',\'rate\')"') + '></td>'
+      + '<td style="padding:6px 8px;font-size:13px;color:var(--text-secondary);font-weight:500;" id="s2amt-' + idx + '">' + amtStr + '</td>'
+      + '<td style="padding:6px 8px;"><input type="text" class="form-input" style="font-size:13px;height:34px;" placeholder="Optional..." value="' + esc(it.notes2) + '" ' + (dis?'disabled style="opacity:0.5;font-size:13px;height:34px;"':'oninput="s2ItemChange(' + idx + ',\'notes2\',this.value)"') + '></td>'
+      + (!dis ? '<td style="padding:6px 4px;text-align:center;"><button onclick="s2RemoveItem(' + idx + ')" title="Remove row" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:16px;line-height:1;padding:2px 6px;border-radius:6px;" onmouseover="this.style.background=\'var(--red-light)\'" onmouseout="this.style.background=\'none\'">&#10005;</button></td>' : '')
+      + '</tr>';
+  });
+
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+
+  // Re-attach live input listeners to product inputs (non-disabled)
+  if (!dis) {
+    _s2Items.forEach(function(it, idx) {
+      var inp = document.getElementById('s2p-' + idx);
+      if (inp) {
+        inp.addEventListener('blur', function() {
+          setTimeout(function() {
+            var dd = document.getElementById('s2dd-' + idx);
+            if (dd) dd.style.display = 'none';
+          }, 180);
+        });
+      }
+    });
+  }
+  _updateS2Total();
+}
+
+function _s2NumChange(el, idx, field) {
+  if (_s2Items[idx]) _s2Items[idx][field] = el.value;
+  var q = parseFloat(_s2Items[idx].qty) || 0;
+  var r = parseFloat(_s2Items[idx].rate) || 0;
+  var amt = q * r;
+  var amtEl = document.getElementById('s2amt-' + idx);
+  if (amtEl) amtEl.textContent = amt > 0 ? '₹' + amt.toFixed(2) : '—';
+  _updateS2Total();
+}
+
+function _s2ProdInput(el, idx) {
+  if (_s2Items[idx]) _s2Items[idx].product = el.value;
+  var dd = document.getElementById('s2dd-' + idx);
+  if (!dd) return;
+  var val = el.value.trim().toLowerCase();
+  var matches = val === '' ? state.products.slice(0, 40) : state.products.filter(function(p){ return p.toLowerCase().includes(val); }).slice(0, 40);
+  if (matches.length === 0) {
+    dd.innerHTML = '<div style="padding:8px 12px;font-size:12px;color:var(--text-hint);font-style:italic;">No match — type manually</div>';
+  } else {
+    dd.innerHTML = matches.map(function(p) {
+      var e2 = esc(p);
+      return '<div onmousedown="_s2ProdSelect(' + idx + ',\'' + e2.replace(/'/g,"\\'") + '\')" style="padding:8px 12px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--border);" onmouseover="this.style.background=\'var(--blue-light)\'" onmouseout="this.style.background=\'\'">&#128230; ' + e2 + '</div>';
+    }).join('');
+  }
+  dd.style.display = 'block';
+}
+
+function _s2ProdFocus(el, idx) { _s2ProdInput(el, idx); }
+
+function _s2ProdKeydown(e, el, idx) {
+  if (e.key === 'Escape') {
+    var dd = document.getElementById('s2dd-' + idx);
+    if (dd) dd.style.display = 'none';
+  }
+}
+
+function _s2ProdSelect(idx, name) {
+  if (_s2Items[idx]) _s2Items[idx].product = name;
+  var inp = document.getElementById('s2p-' + idx);
+  if (inp) inp.value = name;
+  var dd = document.getElementById('s2dd-' + idx);
+  if (dd) dd.style.display = 'none';
+}
+
+function step2Fields(orderedBy, orderDate, items, vendor, notes2Header, isEdit, cancelledInfo) {
+  // items = array of {product, qty, rate, notes2} — init global state
+  _s2Items = (items && items.length > 0) ? JSON.parse(JSON.stringify(items)) : [{ product: '', qty: '', rate: '', notes2: '' }];
+
   const cancelledBanner = cancelledInfo
     ? '<div class="cancelled-banner"><div class="cancelled-banner-icon">&#10006;</div><div class="cancelled-banner-text"><div class="cancelled-banner-title">This order was cancelled</div><div class="cancelled-banner-reason">Reason: ' + esc(cancelledInfo.reason) + (cancelledInfo.cancelledBy ? ' &mdash; By: ' + esc(cancelledInfo.cancelledBy) : '') + (cancelledInfo.cancelledDate ? ' on ' + esc(cancelledInfo.cancelledDate) : '') + '</div></div></div>'
     : '';
@@ -1464,7 +1696,6 @@ function step2Fields(orderedBy, orderDate, qty, vendor, rate, notes2, isEdit, ca
 
   const dis = cancelledInfo ? true : false;
 
-  // Cancel order box - only show if not already cancelled
   const cancelBox = !cancelledInfo ? '<div class="cancel-box">'
     + '<div class="cancel-box-title">&#10006; Cancel This Order</div>'
     + '<div class="cancel-reason-group">'
@@ -1482,19 +1713,84 @@ function step2Fields(orderedBy, orderDate, qty, vendor, rate, notes2, isEdit, ca
     + '</div></div>'
     : '<div style="margin-bottom:14px;"><button class="btn btn-sm" onclick="restoreOrder()" style="color:var(--green);border-color:rgba(15,110,86,0.3);">&#8635; Restore / Re-open Order</button></div>';
 
-  return cancelledBanner
+  // Build items section
+  var itemsSection = '<div style="margin-bottom:1.25rem;">'
+    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">'
+    + '<label class="form-label" style="margin-bottom:0;">Order Items *</label>'
+    + (!dis ? '<button class="btn btn-sm btn-primary" onclick="s2AddItem()" type="button">+ Add Item</button>' : '')
+    + '</div>'
+    + '<div id="s2-items-wrap" data-disabled="' + (dis?'true':'false') + '" style="border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;"></div>'
+    + '<div style="display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-top:8px;padding:6px 10px;background:var(--surface2);border-radius:var(--radius);border:1px solid var(--border);">'
+    + '<span style="font-size:12px;color:var(--text-secondary);font-weight:500;text-transform:uppercase;letter-spacing:.04em;">Grand Total</span>'
+    + '<span id="s2-grand-total" style="font-size:16px;font-weight:700;color:var(--blue);font-family:\'DM Mono\',monospace;">—</span>'
+    + '</div>'
+    + '</div>';
+
+  var result = cancelledBanner
     + '<div class="form-grid">'
     + '<div class="form-group"><label class="form-label">Ordered By (Name) *</label>' + empDropdownField('f-orderedBy', orderedBy, 'Person placing the order', dis) + '</div>'
     + '<div class="form-group"><label class="form-label">Order Date *</label><input class="form-input" type="date" id="f-orderDate" value="' + (orderDate||today()) + '" ' + (dis?'disabled style="opacity:0.5"':'') + '></div>'
-    + '</div><div class="form-grid">'
-    + '<div class="form-group"><label class="form-label">Quantity *</label><input class="form-input" type="number" id="f-qty" placeholder="e.g. 10" min="1" value="' + esc(qty) + '" ' + (dis?'disabled style="opacity:0.5"':'') + '></div>'
-    + '<div class="form-group"><label class="form-label">Ordered From (Vendor) *</label><input class="form-input" type="text" id="f-vendor" placeholder="Supplier / Company name" value="' + esc(vendor) + '" ' + (dis?'disabled style="opacity:0.5"':'') + '></div>'
-    + '</div><div class="form-grid">'
-    + '<div class="form-group"><label class="form-label">Product Rate / Unit Price *</label><input class="form-input" type="number" id="f-rate" placeholder="e.g. 250.00" min="0" step="0.01" value="' + esc(rate) + '" ' + (dis?'disabled style="opacity:0.5"':'') + '></div>'
-    + '<div class="form-group"><label class="form-label">Notes / Reference (optional)</label><input class="form-input" type="text" id="f-notes2" placeholder="PO reference, special instructions..." value="' + esc(notes2) + '" ' + (dis?'disabled style="opacity:0.5"':'') + '></div>'
     + '</div>'
+    + '<div class="form-grid">'
+    + '<div class="form-group"><label class="form-label">Ordered From (Vendor) *</label><input class="form-input" type="text" id="f-vendor" placeholder="Supplier / Company name" value="' + esc(vendor||'') + '" ' + (dis?'disabled style="opacity:0.5"':'') + '></div>'
+    + '<div class="form-group"><label class="form-label">PO Reference / Header Notes (optional)</label><input class="form-input" type="text" id="f-notes2" placeholder="PO number, special instructions..." value="' + esc(notes2Header||'') + '" ' + (dis?'disabled style="opacity:0.5"':'') + '></div>'
+    + '</div>'
+    + itemsSection
     + cancelBox
     + '<div class="form-actions"><button class="btn btn-ghost" onclick="goList()">Back to List</button>' + (!cancelledInfo ? saveBtn : '') + '</div>';
+
+  // Render items table after DOM is updated
+  setTimeout(function() { _renderS2Items(); }, 0);
+  return result;
+}
+
+// ── STEP 3 ITEMS SUMMARY (read-only, from step2) ──
+function step3ItemsSummary(order) {
+  var s2 = order.step2;
+  if (!s2) return '';
+  var items = (s2.items && s2.items.length > 0)
+    ? s2.items
+    : [{ product: order.step1.productName, qty: s2.qty||'-', rate: s2.rate||'-', notes2: s2.notes2||'' }];
+  var grandTotal = 0;
+  var itemRows = items.map(function(it, i) {
+    var qty = parseFloat(it.qty) || 0;
+    var rate = parseFloat(it.rate) || 0;
+    var amt = qty * rate;
+    grandTotal += amt;
+    return '<tr style="border-bottom:1px solid var(--border);">'
+      + '<td style="padding:8px 12px;font-size:13px;color:var(--text-secondary);">' + (i+1) + '</td>'
+      + '<td style="padding:8px 12px;font-size:13px;font-weight:500;">' + esc(it.product) + '</td>'
+      + '<td style="padding:8px 12px;font-size:13px;text-align:center;">' + esc(String(it.qty)) + '</td>'
+      + '<td style="padding:8px 12px;font-size:13px;text-align:right;">₹' + rate.toFixed(2) + '</td>'
+      + '<td style="padding:8px 12px;font-size:13px;font-weight:600;color:var(--blue);text-align:right;">' + (amt > 0 ? '₹'+amt.toFixed(2) : '—') + '</td>'
+      + '<td style="padding:8px 12px;font-size:12px;color:var(--text-secondary);">' + esc(it.notes2||'') + '</td>'
+      + '</tr>';
+  }).join('');
+  var vendorInfo = s2.vendor ? ('<span style="font-size:12px;color:var(--text-secondary);">Vendor: <strong>' + esc(s2.vendor) + '</strong></span>') : '';
+  var poInfo = s2.notes2Header ? (' &nbsp;·&nbsp; <span style="font-size:12px;color:var(--text-secondary);">PO Ref: <strong>' + esc(s2.notes2Header) + '</strong></span>') : '';
+  return '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-lg);margin-bottom:1.25rem;overflow:hidden;">'
+    + '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface);">'
+    + '<div style="font-size:13px;font-weight:600;">📦 Items Ordered — Verify on Receipt</div>'
+    + '<div>' + vendorInfo + poInfo + '</div>'
+    + '</div>'
+    + '<table style="width:100%;border-collapse:collapse;">'
+    + '<thead><tr style="background:var(--surface2);">'
+    + '<th style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em;padding:7px 12px;text-align:left;border-bottom:1px solid var(--border);width:32px;">#</th>'
+    + '<th style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em;padding:7px 12px;text-align:left;border-bottom:1px solid var(--border);">Product / Item</th>'
+    + '<th style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em;padding:7px 12px;text-align:center;border-bottom:1px solid var(--border);width:70px;">Qty</th>'
+    + '<th style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em;padding:7px 12px;text-align:right;border-bottom:1px solid var(--border);width:90px;">Rate</th>'
+    + '<th style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em;padding:7px 12px;text-align:right;border-bottom:1px solid var(--border);width:100px;">Amount</th>'
+    + '<th style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em;padding:7px 12px;text-align:left;border-bottom:1px solid var(--border);">Notes</th>'
+    + '</tr></thead>'
+    + '<tbody>' + itemRows + '</tbody>'
+    + (grandTotal > 0
+        ? '<tfoot><tr style="background:var(--blue-light);">'
+          + '<td colspan="4" style="padding:8px 12px;font-size:12px;font-weight:600;color:var(--blue);text-align:right;border-top:1px solid rgba(24,95,165,0.2);">Grand Total</td>'
+          + '<td style="padding:8px 12px;font-size:14px;font-weight:700;color:var(--blue);text-align:right;border-top:1px solid rgba(24,95,165,0.2);">₹' + grandTotal.toFixed(2) + '</td>'
+          + '<td style="border-top:1px solid rgba(24,95,165,0.2);"></td>'
+          + '</tr></tfoot>'
+        : '')
+    + '</table></div>';
 }
 
 // ── STEP 3 FORM (New) ──
@@ -1505,6 +1801,7 @@ function renderStep3() {
     + '<div class="form-section">'
     + '<div class="form-section-header"><span class="step-badge sb-3">Step 3</span><span class="form-section-title">Receiving &amp; Verification</span></div>'
     + '<div class="order-ref">Order <strong>' + esc(o.id) + '</strong> &mdash; ' + esc(o.step1.productName) + '</div>'
+    + step3ItemsSummary(o)
     + step3Fields(autoName, '', autoName, '', '', '', false) + '</div>';
 }
 
@@ -1516,6 +1813,7 @@ function renderStep3Edit() {
     + '<div class="form-section">'
     + '<div class="form-section-header"><span class="step-badge sb-3">Step 3</span><span class="form-section-title">Edit Receiving &amp; Verification</span><span class="edit-badge">&#9998; Editing</span></div>'
     + '<div class="order-ref">Editing order <strong>' + esc(o.id) + '</strong> &mdash; ' + esc(o.step1.productName) + '</div>'
+    + step3ItemsSummary(o)
     + step3Fields(s3.receivedBy, s3.receivedDate, s3.checkedBy, s3.checkDate, s3.invoiceNo||'', s3.remarks||'', true) + '</div>';
 }
 
@@ -1680,7 +1978,57 @@ function renderViewModal(id) {
   const s1Rows = detailRows([['Product', o.step1.productName], ['Request Date', o.step1.date], o.step1.requestedBy ? ['Requested By', o.step1.requestedBy] : null]);
   const s2Rows = o.cancelled
     ? detailRows([['Status', 'CANCELLED'], ['Reason', o.cancelled.reason], ['Cancelled By', o.cancelled.cancelledBy||'-'], ['Cancelled Date', o.cancelled.cancelledDate||'-']])
-    : o.step2 ? detailRows([['Ordered By', o.step2.orderedBy],['Order Date', o.step2.orderDate],['Quantity', o.step2.qty],['Rate / Unit Price', o.step2.rate ? '₹' + o.step2.rate : '-'],['Ordered From', o.step2.vendor], o.step2.notes2?['Notes', o.step2.notes2]:null]) : null;
+    : o.step2 ? (function() {
+        var s2 = o.step2;
+        // Handle "merged into another order" case
+        if (s2.mergedInto) {
+          return '<div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--blue-light);border-radius:var(--radius);margin:4px 0;">'
+            + '<span style="font-size:14px;">🔗</span>'
+            + '<div style="font-size:13px;color:var(--blue);">This item was bundled into order <strong style="cursor:pointer;text-decoration:underline;" onclick="closeModal();viewOrder(\'' + esc(s2.mergedInto) + '\')">' + esc(s2.mergedInto) + '</strong></div>'
+            + '</div>';
+        }
+        var headerRows = detailRows([['Ordered By', s2.orderedBy], ['Order Date', s2.orderDate], ['Ordered From', s2.vendor], s2.notes2Header ? ['PO Reference', s2.notes2Header] : null]);
+        // Show merged order badges if any
+        var mergedBadges = '';
+        if (s2.mergedFromIds && s2.mergedFromIds.length > 0) {
+          mergedBadges = '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:6px 0 10px;">'
+            + '<span style="font-size:11px;color:var(--text-secondary);font-weight:500;">Bundled requests:</span>'
+            + s2.mergedFromIds.map(function(mid) {
+                return '<span style="font-size:11px;padding:2px 8px;border-radius:20px;background:var(--blue-light);color:var(--blue);font-weight:500;cursor:pointer;" onclick="closeModal();viewOrder(\'' + esc(mid) + '\')">🔗 ' + esc(mid) + '</span>';
+              }).join('')
+            + '</div>';
+        }
+        // Build items table
+        var items = s2.items && s2.items.length > 0
+          ? s2.items
+          : [{ product: o.step1.productName, qty: s2.qty||'-', rate: s2.rate||'-', notes2: s2.notes2||'' }];
+        var grandTotal = 0;
+        var itemRows = items.map(function(it, i) {
+          var amt = (parseFloat(it.qty)||0) * (parseFloat(it.rate)||0);
+          grandTotal += amt;
+          return '<tr style="border-bottom:1px solid var(--border);">'
+            + '<td style="padding:6px 10px;font-size:13px;">' + (i+1) + '</td>'
+            + '<td style="padding:6px 10px;font-size:13px;font-weight:500;">' + esc(it.product) + '</td>'
+            + '<td style="padding:6px 10px;font-size:13px;">' + esc(it.qty) + '</td>'
+            + '<td style="padding:6px 10px;font-size:13px;">₹' + parseFloat(it.rate||0).toFixed(2) + '</td>'
+            + '<td style="padding:6px 10px;font-size:13px;font-weight:600;color:var(--blue);">' + (amt > 0 ? '₹'+amt.toFixed(2) : '—') + '</td>'
+            + '<td style="padding:6px 10px;font-size:12px;color:var(--text-secondary);">' + esc(it.notes2||'') + '</td>'
+            + '</tr>';
+        }).join('');
+        var itemTable = '<div style="margin:8px 0;">'
+          + '<table style="width:100%;border-collapse:collapse;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;">'
+          + '<thead><tr style="background:var(--surface2);">'
+          + '<th style="font-size:11px;font-weight:600;color:var(--text-secondary);padding:7px 10px;text-align:left;border-bottom:1px solid var(--border);width:32px;">#</th>'
+          + '<th style="font-size:11px;font-weight:600;color:var(--text-secondary);padding:7px 10px;text-align:left;border-bottom:1px solid var(--border);">Product</th>'
+          + '<th style="font-size:11px;font-weight:600;color:var(--text-secondary);padding:7px 10px;text-align:left;border-bottom:1px solid var(--border);width:60px;">Qty</th>'
+          + '<th style="font-size:11px;font-weight:600;color:var(--text-secondary);padding:7px 10px;text-align:left;border-bottom:1px solid var(--border);width:80px;">Rate</th>'
+          + '<th style="font-size:11px;font-weight:600;color:var(--text-secondary);padding:7px 10px;text-align:left;border-bottom:1px solid var(--border);width:90px;">Amount</th>'
+          + '<th style="font-size:11px;font-weight:600;color:var(--text-secondary);padding:7px 10px;text-align:left;border-bottom:1px solid var(--border);">Notes</th>'
+          + '</tr></thead><tbody>' + itemRows + '</tbody>'
+          + (grandTotal > 0 ? '<tfoot><tr style="background:var(--blue-light);"><td colspan="4" style="padding:7px 10px;font-size:12px;font-weight:600;color:var(--blue);text-align:right;border-top:1px solid var(--border);">Grand Total</td><td style="padding:7px 10px;font-size:13px;font-weight:700;color:var(--blue);border-top:1px solid var(--border);">₹'+grandTotal.toFixed(2)+'</td><td style="border-top:1px solid var(--border);"></td></tr></tfoot>' : '')
+          + '</table></div>';
+        return headerRows + mergedBadges + itemTable;
+      })() : null;
   const s3Rows = o.step3 ? detailRows([['Received By', o.step3.receivedBy],['Received Date', o.step3.receivedDate],['Checked By', o.step3.checkedBy],['Check Date', o.step3.checkDate],['Bill / Invoice No.', o.step3.invoiceNo||'-'], o.step3.remarks?['Remarks', o.step3.remarks]:null]) : null;
 
   function section(badgeCls, stepLabel, rows, editFn, isLocked) {
@@ -1770,6 +2118,7 @@ function viewOrder(id)      { state.modal=id; render(); }
 function closeModal()       { state.modal=null; render(); }
 function goStep2(id) {
   if (!state.loggedInEmployee) { showMsgBox('Login Required', 'Please login with your employee name to fill order details.', 'error'); return; }
+  _addedPendingReqs = {};
   state.editId=id; state.view='step2'; render();
 }
 function goStep3(id) {
@@ -1824,16 +2173,60 @@ function saveStep1(isEdit) {
 function saveStep2(isEdit) {
   const orderedBy = document.getElementById('f-orderedBy').value.trim();
   const orderDate = document.getElementById('f-orderDate').value;
-  const qty = document.getElementById('f-qty').value;
   const vendor = document.getElementById('f-vendor').value.trim();
-  const rate = document.getElementById('f-rate') ? document.getElementById('f-rate').value.trim() : '';
-  const notes2 = document.getElementById('f-notes2').value.trim();
-  if (!orderedBy||!orderDate||!qty||!vendor) { showMsgBox('Required','Please fill in all required fields.','error'); return; }
-  if (!rate) { showMsgBox('Required','Please enter the Product Rate / Unit Price.','error'); return; }
+  const notes2Header = document.getElementById('f-notes2') ? document.getElementById('f-notes2').value.trim() : '';
+  if (!orderedBy || !orderDate || !vendor) { showMsgBox('Required','Please fill in Ordered By, Order Date, and Vendor.','error'); return; }
+
+  // Collect items from _s2Items, also sync latest values from DOM
+  var items = [];
+  var hasError = false;
+  _s2Items.forEach(function(it, idx) {
+    // Read from DOM inputs directly in case onChange didn't fire
+    var prodEl = document.getElementById('s2p-' + idx) || document.querySelector('#s2row-' + idx + ' input[type="text"]');
+    var qtyEl  = document.getElementById('s2qty-' + idx);
+    var rateEl = document.getElementById('s2rate-' + idx);
+    var notesEl = document.querySelector('#s2row-' + idx + ' input[placeholder="Optional..."]');
+    var product = prodEl ? prodEl.value.trim() : (it.product || '');
+    var qty     = qtyEl  ? qtyEl.value.trim()  : (it.qty   || '');
+    var rate    = rateEl ? rateEl.value.trim()  : (it.rate  || '');
+    var notes2  = notesEl ? notesEl.value.trim() : (it.notes2 || '');
+    if (!product || !qty || !rate) { hasError = true; return; }
+    items.push({ product, qty, rate, notes2 });
+  });
+
+  if (hasError || items.length === 0) {
+    showMsgBox('Required', 'Each item must have a Product Name, Quantity, and Rate. Please fill all rows or remove empty ones.', 'error');
+    return;
+  }
+
   const o = state.orders.find(x => x.id === state.editId);
-  o.step2 = { orderedBy, orderDate, qty, vendor, rate, notes2 };
-  save(o); state.view='list'; render();
-  if (isEdit) showMsgBox('Updated', 'Step 2 has been updated successfully.', 'success');
+  // Store which pending order IDs were merged into this order
+  var mergedFromIds = _s2Items
+    .filter(function(it) { return it.fromOrderId && it.fromOrderId !== o.id; })
+    .map(function(it) { return it.fromOrderId; });
+  // Deduplicate
+  mergedFromIds = mergedFromIds.filter(function(id, i, a) { return a.indexOf(id) === i; });
+
+  o.step2 = { orderedBy, orderDate, vendor, notes2Header, items, mergedFromIds: mergedFromIds };
+  save(o);
+
+  // Mark each merged pending order as "merged" into this order (so they don't show as pending)
+  var mergedCount = 0;
+  mergedFromIds.forEach(function(linkedId) {
+    var linked = state.orders.find(function(x) { return x.id === linkedId; });
+    if (linked && !linked.step2) {
+      linked.step2 = { mergedInto: o.id, orderedBy: orderedBy, orderDate: orderDate, vendor: vendor, qty: '-', rate: '-', items: [] };
+      save(linked);
+      mergedCount++;
+    }
+  });
+  _addedPendingReqs = {};
+  state.view='list'; render();
+  if (isEdit) {
+    showMsgBox('Updated', 'Step 2 has been updated successfully.', 'success');
+  } else if (mergedCount > 0) {
+    showMsgBox('Order Saved', 'Order details saved. ' + mergedCount + ' additional purchase request' + (mergedCount > 1 ? 's were' : ' was') + ' bundled into this order.', 'success');
+  }
 }
 
 // ── SAVE STEP 3 ──
