@@ -307,6 +307,27 @@ if (!CONFIG_FILLED) {
   .firebase-config-banner { background:#FFF8E1;border:1px solid #FFD54F;border-radius:var(--radius);padding:12px 16px;margin-bottom:1rem;font-size:13px;color:#5D4037; }
   .firebase-config-banner strong { color:#3E2723; }
   @media (max-width: 600px) { .stats-grid { grid-template-columns: 1fr 1fr; } .form-grid { grid-template-columns: 1fr; } .container { padding: 1rem; } .topbar { padding: 0 1rem; } .step-line { width: 32px; } .filter-bar { gap: 6px; } .filter-result { width: 100%; margin-left: 0; } }
+
+  /* Admin Panel */
+  .admin-btn { height:32px; padding:0 12px; border-radius:8px; border:1px solid var(--border-strong); background:transparent; font-size:12px; font-weight:500; cursor:pointer; font-family:'DM Sans',sans-serif; display:inline-flex; align-items:center; gap:5px; transition:all 0.15s; color:var(--text-secondary); margin-left:10px; }
+  .admin-btn:hover { background:var(--surface2); }
+  .admin-btn.logged-in { background:#185FA5; color:#fff; border-color:#185FA5; }
+  .admin-btn.logged-in:hover { background:#0C447C; border-color:#0C447C; }
+  .admin-overlay { position:fixed;inset:0;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;z-index:1000;padding:1rem; }
+  .admin-modal { background:#fff;border-radius:16px;padding:2rem;width:100%;max-width:380px;border:1px solid rgba(0,0,0,0.10);box-shadow:0 8px 40px rgba(0,0,0,0.18); }
+  .admin-modal-title { font-size:18px;font-weight:700;margin-bottom:4px;color:#1A1917;display:flex;align-items:center;gap:8px; }
+  .admin-modal-sub { font-size:13px;color:#6B6A66;margin-bottom:1.5rem; }
+  .admin-field-label { font-size:11px;font-weight:600;color:#6B6A66;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:5px;display:block; }
+  .admin-field { height:40px;padding:0 12px;border:1.5px solid rgba(0,0,0,0.18);border-radius:10px;background:#F5F4F0;color:#1A1917;font-size:14px;font-family:'DM Sans',sans-serif;outline:none;transition:all 0.15s;width:100%;box-sizing:border-box;margin-bottom:14px; }
+  .admin-field:focus { border-color:#185FA5;background:#fff;box-shadow:0 0 0 3px rgba(24,95,165,0.13); }
+  .admin-field-wrap { position:relative; }
+  .admin-field-wrap .toggle-eye { position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:15px;color:#9E9D99;padding:0; }
+  .admin-error { font-size:12px;color:#A32D2D;margin-bottom:12px;min-height:18px;font-weight:500; }
+  .admin-login-btn { height:40px;width:100%;border-radius:10px;border:none;background:#185FA5;color:#fff;font-size:14px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all 0.15s;margin-bottom:8px; }
+  .admin-login-btn:hover { background:#0C447C; }
+  .admin-cancel-btn { height:36px;width:100%;border-radius:10px;border:1px solid rgba(0,0,0,0.18);background:transparent;color:#6B6A66;font-size:13px;font-weight:500;cursor:pointer;font-family:'DM Sans',sans-serif; }
+  .admin-cancel-btn:hover { background:#F0EEE9; }
+  .admin-badge { display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;background:#185FA5;color:#fff;text-transform:uppercase;letter-spacing:0.06em;margin-left:8px;vertical-align:middle; }
 </style>
 </head>
 <body>
@@ -321,8 +342,12 @@ if (!CONFIG_FILLED) {
       <span class="brand-tag">v15.0</span>
     </div>
   </div>
-  <span id="sync-badge" class="sync-badge offline">● Offline</span>
+  <div style="display:flex;align-items:center;gap:8px;">
+    <span id="sync-badge" class="sync-badge offline">● Offline</span>
+    <button id="admin-topbar-btn" class="admin-btn" onclick="openAdminPanel()">&#128274; Admin</button>
+  </div>
 </div>
+<div id="admin-panel-root"></div>
 
 <div class="container">
   <div class="stats-grid" id="stats-grid"></div>
@@ -343,7 +368,8 @@ let state = {
   products: JSON.parse(localStorage.getItem(PM_KEY) || '[]'),
   modal: null,
   editId: null,
-  highlightIdx: -1
+  highlightIdx: -1,
+  adminLoggedIn: false
 };
 
 function save(changedOrder) {
@@ -373,6 +399,109 @@ function _setSyncStatus(status) {
   el.textContent = labels[status] || status;
 }
 window._setSyncStatus = _setSyncStatus;
+
+// ── ADMIN PANEL ──
+var ADMIN_ID = 'mandalkuntal';
+var ADMIN_PW = 'Buku@2016';
+
+function updateAdminTopbarBtn() {
+  var btn = document.getElementById('admin-topbar-btn');
+  if (!btn) return;
+  if (state.adminLoggedIn) {
+    btn.className = 'admin-btn logged-in';
+    btn.innerHTML = '&#128513; Admin <span class="admin-badge">ON</span>';
+    btn.title = 'Admin logged in — click to logout';
+  } else {
+    btn.className = 'admin-btn';
+    btn.innerHTML = '&#128274; Admin';
+    btn.title = 'Admin login';
+  }
+}
+
+function openAdminPanel() {
+  if (state.adminLoggedIn) {
+    // Show logout confirm
+    var overlay = document.createElement('div');
+    overlay.className = 'admin-overlay';
+    overlay.id = 'admin-logout-overlay';
+    overlay.innerHTML = '<div class="admin-modal">'
+      + '<div class="admin-modal-title">&#128513; Admin Session</div>'
+      + '<div class="admin-modal-sub">You are currently logged in as Admin. Admin controls (Delete, Upload, Clear) are visible.</div>'
+      + '<button class="admin-login-btn" style="background:#A32D2D;" onclick="adminLogout()">&#10006; Logout from Admin</button>'
+      + '<button class="admin-cancel-btn" onclick="closeAdminOverlay()">Keep Session</button>'
+      + '</div>';
+    document.getElementById('admin-panel-root').innerHTML = '';
+    document.getElementById('admin-panel-root').appendChild(overlay);
+    return;
+  }
+  renderAdminLogin();
+}
+
+function renderAdminLogin() {
+  var root = document.getElementById('admin-panel-root');
+  root.innerHTML = '';
+  var overlay = document.createElement('div');
+  overlay.className = 'admin-overlay';
+  overlay.id = 'admin-login-overlay';
+  overlay.innerHTML = '<div class="admin-modal">'
+    + '<div class="admin-modal-title">&#128274; Admin Login</div>'
+    + '<div class="admin-modal-sub">Enter admin credentials to unlock Delete, Upload, and Clear controls.</div>'
+    + '<label class="admin-field-label">User ID</label>'
+    + '<input class="admin-field" type="text" id="adm-uid" placeholder="Admin User ID" autocomplete="off">'
+    + '<label class="admin-field-label">Password</label>'
+    + '<div class="admin-field-wrap">'
+    + '<input class="admin-field" type="password" id="adm-pwd" placeholder="Admin Password" autocomplete="off" style="padding-right:40px;">'
+    + '<button class="toggle-eye" onclick="toggleAdminPwd()" type="button" title="Show/hide password">&#128065;</button>'
+    + '</div>'
+    + '<div class="admin-error" id="adm-err"></div>'
+    + '<button class="admin-login-btn" onclick="attemptAdminLogin()">&#128275; Login</button>'
+    + '<button class="admin-cancel-btn" onclick="closeAdminOverlay()">Cancel</button>'
+    + '</div>';
+  root.appendChild(overlay);
+  setTimeout(function(){ var f=document.getElementById('adm-uid'); if(f) f.focus(); }, 50);
+  // Enter key support
+  overlay.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') attemptAdminLogin();
+    if (e.key === 'Escape') closeAdminOverlay();
+  });
+}
+
+function toggleAdminPwd() {
+  var f = document.getElementById('adm-pwd');
+  if (f) f.type = f.type === 'password' ? 'text' : 'password';
+}
+
+function attemptAdminLogin() {
+  var uid = (document.getElementById('adm-uid') || {}).value || '';
+  var pwd = (document.getElementById('adm-pwd') || {}).value || '';
+  var err = document.getElementById('adm-err');
+  if (uid.trim() === ADMIN_ID && pwd === ADMIN_PW) {
+    state.adminLoggedIn = true;
+    closeAdminOverlay();
+    updateAdminTopbarBtn();
+    render();
+    showMsgBox('Admin Access Granted', 'You are now logged in as Admin. Delete, Upload, and Clear controls are now visible.', 'success');
+  } else {
+    if (err) err.textContent = '✖ Incorrect User ID or Password.';
+    var pwdField = document.getElementById('adm-pwd');
+    if (pwdField) { pwdField.value = ''; pwdField.focus(); pwdField.style.borderColor='#A32D2D'; }
+    var uidField = document.getElementById('adm-uid');
+    if (uidField && uid.trim() !== ADMIN_ID) uidField.style.borderColor='#A32D2D';
+  }
+}
+
+function adminLogout() {
+  state.adminLoggedIn = false;
+  closeAdminOverlay();
+  updateAdminTopbarBtn();
+  render();
+  showMsgBox('Logged Out', 'Admin session ended. Sensitive controls are now hidden.', 'success');
+}
+
+function closeAdminOverlay() {
+  var root = document.getElementById('admin-panel-root');
+  if (root) root.innerHTML = '';
+}
 function saveProducts() {
   localStorage.setItem(PM_KEY, JSON.stringify(state.products));
   // Push to Firebase — retry once if not ready yet
@@ -472,7 +601,7 @@ function renderList() {
           + '<td>' + nextBtn + '</td>'
           + '<td><div class="action-group">' + editS1 + editS2 + editS3 + '</div></td>'
           + '<td><button class="btn btn-sm btn-ghost" onclick="viewOrder(\'' + o.id + '\')">View</button></td>'
-          + '<td><button class="btn btn-sm btn-danger btn-ghost" onclick="deleteOrder(\'' + o.id + '\')">Delete</button></td>'
+          + '<td>' + (state.adminLoggedIn ? '<button class="btn btn-sm btn-danger btn-ghost" onclick="deleteOrder(\'' + o.id + '\')">Delete</button>' : '<span style="font-size:11px;color:var(--text-hint);padding:0 8px;">🔒</span>') + '</td>'
           + '</tr>';
       }).join('');
 
@@ -481,9 +610,11 @@ function renderList() {
     + '<div class="master-bar-text">' + (productCount > 0
         ? '&#128230; Product list: <strong>' + productCount + ' products</strong> loaded.'
         : '&#128230; No product master list loaded yet.') + '</div>'
-    + '<label class="btn btn-sm" style="cursor:pointer;">' + (productCount > 0 ? 'Replace List' : '&#11014; Upload Product List')
-    + '<input type="file" accept=".xlsx,.xls,.csv" style="display:none;" onchange="handleProductUpload(event)"></label>'
-    + (productCount > 0 ? '<button class="btn btn-sm btn-danger btn-ghost" onclick="clearProducts()">Clear</button>' : '')
+    + (state.adminLoggedIn
+        ? '<label class="btn btn-sm" style="cursor:pointer;">' + (productCount > 0 ? 'Replace List' : '&#11014; Upload Product List')
+          + '<input type="file" accept=".xlsx,.xls,.csv" style="display:none;" onchange="handleProductUpload(event)"></label>'
+          + (productCount > 0 ? '<button class="btn btn-sm btn-danger btn-ghost" onclick="clearProducts()">Clear</button>' : '')
+        : '<span style="font-size:11px;color:var(--text-hint);display:inline-flex;align-items:center;gap:4px;">&#128274; Admin login required to upload/clear</span>')
     + '</div>';
 
   const isFiltered = state.dateFrom || state.dateTo;
@@ -860,6 +991,7 @@ window._render = function() { render(); };
 
 // ── RENDER ──
 function render() {
+  updateAdminTopbarBtn();
   document.getElementById('stats-grid').innerHTML = renderStats();
   const v = state.view;
   let html = '';
