@@ -72,6 +72,13 @@ if (!CONFIG_FILLED) {
       } catch(e) { console.error('Products save error:', e); }
     };
 
+    // ── Save employees ──
+    window._fbSaveEmployees = async function(employees) {
+      try {
+        await setDoc(doc(db, 'meta', 'employees'), { list: employees });
+      } catch(e) { console.error('Employees save error:', e); }
+    };
+
     // ── Real-time listener ──
     window._startFirestoreSync = function() {
       window._setSyncStatus('connecting');
@@ -101,8 +108,6 @@ if (!CONFIG_FILLED) {
 
       // Products — immediate fetch first, then live listener
       const productsDocRef = doc(db, 'meta', 'products');
-
-      // Fetch immediately on load so other devices get products right away
       getDoc(productsDocRef).then(function(snap) {
         if (snap.exists()) {
           const products = snap.data().list || [];
@@ -112,13 +117,11 @@ if (!CONFIG_FILLED) {
         }
       }).catch(function(e){ console.warn('getDoc products error:', e); });
 
-      // Then keep listening for any future changes (e.g. when another device uploads)
       onSnapshot(
         productsDocRef,
         function(snapshot) {
           if (snapshot.exists()) {
             const products = snapshot.data().list || [];
-            // Only update if different from current
             const current = JSON.stringify(window._state.products);
             const incoming = JSON.stringify(products);
             if (current !== incoming) {
@@ -131,6 +134,36 @@ if (!CONFIG_FILLED) {
           }
         },
         function(err) { console.error('Products listener error:', err); }
+      );
+
+      // Employees — immediate fetch first, then live listener
+      const employeesDocRef = doc(db, 'meta', 'employees');
+      getDoc(employeesDocRef).then(function(snap) {
+        if (snap.exists()) {
+          const employees = snap.data().list || [];
+          window._state.employees = employees;
+          localStorage.setItem('pt_employees_v1', JSON.stringify(employees));
+          window._render();
+        }
+      }).catch(function(e){ console.warn('getDoc employees error:', e); });
+
+      onSnapshot(
+        employeesDocRef,
+        function(snapshot) {
+          if (snapshot.exists()) {
+            const employees = snapshot.data().list || [];
+            const current = JSON.stringify(window._state.employees);
+            const incoming = JSON.stringify(employees);
+            if (current !== incoming) {
+              window._state.employees = employees;
+              localStorage.setItem('pt_employees_v1', JSON.stringify(employees));
+              window._render();
+            }
+          } else {
+            window._state.employees = [];
+          }
+        },
+        function(err) { console.error('Employees listener error:', err); }
       );
     };
 
