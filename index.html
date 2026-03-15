@@ -583,11 +583,12 @@ function openAdminPanel() {
     overlay.className = 'admin-overlay';
     overlay.id = 'admin-logout-overlay';
     overlay.innerHTML = '<div class="admin-modal">'
-      + '<div class="admin-modal-title">&#128513; Admin Session</div>'
-      + '<div class="admin-modal-sub">You are currently logged in as Admin. Admin controls (Delete, Upload, Clear) are visible.</div>'
+      + '<div class="admin-modal-title">&#128513; Admin Panel</div>'
+      + '<div class="admin-modal-sub">You are logged in as Admin. Use the options below to manage the system.</div>'
       + '<button class="admin-login-btn" style="background:#185FA5;margin-bottom:8px;" onclick="closeAdminOverlay();openEmpMgmt()">&#128100; Manage Employees</button>'
+      + '<button class="admin-login-btn" style="background:#0F6E56;margin-bottom:8px;" onclick="exportBackupExcel()">&#128190; Download Full Backup (Excel)</button>'
       + '<button class="admin-login-btn" style="background:#A32D2D;" onclick="adminLogout()">&#10006; Logout from Admin</button>'
-      + '<button class="admin-cancel-btn" onclick="closeAdminOverlay()">Keep Session</button>'
+      + '<button class="admin-cancel-btn" onclick="closeAdminOverlay()">Close</button>'
       + '</div>';
     document.getElementById('admin-panel-root').innerHTML = '';
     document.getElementById('admin-panel-root').appendChild(overlay);
@@ -660,6 +661,148 @@ function adminLogout() {
 function closeAdminOverlay() {
   var root = document.getElementById('admin-panel-root');
   if (root) root.innerHTML = '';
+}
+
+// ── FULL BACKUP EXPORT TO EXCEL ──
+function exportBackupExcel() {
+  closeAdminOverlay();
+  try {
+    var wb = XLSX.utils.book_new();
+
+    // ── Sheet 1: All Orders (full detail) ──
+    var ordersData = [
+      ['Order ID','Product Name','Request Date','Status',
+       'Ordered By','Order Date','Quantity','Rate (₹)','Vendor','Notes',
+       'Received By','Received Date','Checked By','Check Date','Invoice No','Remarks',
+       'Cancelled','Cancel Reason','Cancelled By','Cancelled Date']
+    ];
+    state.orders.forEach(function(o) {
+      var s1 = o.step1 || {};
+      var s2 = o.step2 || {};
+      var s3 = o.step3 || {};
+      var can = o.cancelled || {};
+      var status = o.cancelled ? 'Cancelled' : o.step3 ? 'Received' : o.step2 ? 'Ordered' : 'Pending';
+      ordersData.push([
+        o.id || '',
+        s1.productName || '',
+        s1.date || '',
+        status,
+        s2.orderedBy || '',
+        s2.orderDate || '',
+        s2.qty || '',
+        s2.rate || '',
+        s2.vendor || '',
+        s2.notes2 || '',
+        s3.receivedBy || '',
+        s3.receivedDate || '',
+        s3.checkedBy || '',
+        s3.checkDate || '',
+        s3.invoiceNo || '',
+        s3.remarks || '',
+        o.cancelled ? 'Yes' : 'No',
+        can.reason || '',
+        can.cancelledBy || '',
+        can.cancelledDate || ''
+      ]);
+    });
+    var wsOrders = XLSX.utils.aoa_to_sheet(ordersData);
+    // Column widths
+    wsOrders['!cols'] = [
+      {wch:22},{wch:28},{wch:14},{wch:12},
+      {wch:18},{wch:14},{wch:10},{wch:12},{wch:22},{wch:22},
+      {wch:18},{wch:14},{wch:18},{wch:14},{wch:18},{wch:22},
+      {wch:10},{wch:22},{wch:18},{wch:14}
+    ];
+    XLSX.utils.book_append_sheet(wb, wsOrders, 'All Orders');
+
+    // ── Sheet 2: Pending Orders ──
+    var pendingData = [['Order ID','Product Name','Request Date','Ordered By','Order Date','Qty','Rate (₹)','Vendor','Notes']];
+    state.orders.filter(function(o){ return !o.cancelled && !o.step3 && o.step2; }).forEach(function(o) {
+      var s1 = o.step1||{}; var s2 = o.step2||{};
+      pendingData.push([o.id,s1.productName,s1.date,s2.orderedBy,s2.orderDate,s2.qty,s2.rate,s2.vendor,s2.notes2||'']);
+    });
+    var wsPending = XLSX.utils.aoa_to_sheet(pendingData);
+    wsPending['!cols'] = [{wch:22},{wch:28},{wch:14},{wch:18},{wch:14},{wch:8},{wch:12},{wch:22},{wch:22}];
+    XLSX.utils.book_append_sheet(wb, wsPending, 'Pending Orders');
+
+    // ── Sheet 3: Received Orders ──
+    var recvData = [['Order ID','Product Name','Request Date','Vendor','Qty','Rate (₹)','Received By','Received Date','Checked By','Check Date','Invoice No','Remarks']];
+    state.orders.filter(function(o){ return o.step3; }).forEach(function(o) {
+      var s1=o.step1||{}; var s2=o.step2||{}; var s3=o.step3||{};
+      recvData.push([o.id,s1.productName,s1.date,s2.vendor||'',s2.qty||'',s2.rate||'',s3.receivedBy,s3.receivedDate,s3.checkedBy,s3.checkDate,s3.invoiceNo||'',s3.remarks||'']);
+    });
+    var wsRecv = XLSX.utils.aoa_to_sheet(recvData);
+    wsRecv['!cols'] = [{wch:22},{wch:28},{wch:14},{wch:22},{wch:8},{wch:12},{wch:18},{wch:14},{wch:18},{wch:14},{wch:18},{wch:22}];
+    XLSX.utils.book_append_sheet(wb, wsRecv, 'Received Orders');
+
+    // ── Sheet 4: Cancelled Orders ──
+    var canData = [['Order ID','Product Name','Request Date','Cancel Reason','Cancelled By','Cancelled Date']];
+    state.orders.filter(function(o){ return o.cancelled; }).forEach(function(o) {
+      var s1=o.step1||{}; var can=o.cancelled||{};
+      canData.push([o.id,s1.productName,s1.date,can.reason||'',can.cancelledBy||'',can.cancelledDate||'']);
+    });
+    var wsCan = XLSX.utils.aoa_to_sheet(canData);
+    wsCan['!cols'] = [{wch:22},{wch:28},{wch:14},{wch:28},{wch:18},{wch:14}];
+    XLSX.utils.book_append_sheet(wb, wsCan, 'Cancelled Orders');
+
+    // ── Sheet 5: Product Master List ──
+    var prodData = [['#','Product Name']];
+    state.products.forEach(function(p, i){ prodData.push([i+1, p]); });
+    var wsProd = XLSX.utils.aoa_to_sheet(prodData);
+    wsProd['!cols'] = [{wch:6},{wch:40}];
+    XLSX.utils.book_append_sheet(wb, wsProd, 'Product Master');
+
+    // ── Sheet 6: Employee List ──
+    var empData = [['#','Employee Name']];
+    state.employees.forEach(function(e, i){ empData.push([i+1, e]); });
+    var wsEmp = XLSX.utils.aoa_to_sheet(empData);
+    wsEmp['!cols'] = [{wch:6},{wch:30}];
+    XLSX.utils.book_append_sheet(wb, wsEmp, 'Employees');
+
+    // ── Sheet 7: Summary Stats ──
+    var now = new Date();
+    var dateStr = now.toLocaleDateString('en-IN') + ' ' + now.toLocaleTimeString('en-IN');
+    var c = getCounts();
+    var totalAmt = state.orders.reduce(function(sum, o){
+      if (o.step2 && o.step2.qty && o.step2.rate) return sum + (parseFloat(o.step2.qty)||0) * (parseFloat(o.step2.rate)||0);
+      return sum;
+    }, 0);
+    var summaryData = [
+      ['PURCHASE TRACKER — FULL BACKUP'],
+      ['Backup Generated', dateStr],
+      [''],
+      ['SUMMARY', ''],
+      ['Total Orders', c.all],
+      ['Pending (Step 1 only)', state.orders.filter(function(o){return !o.cancelled&&!o.step2;}).length],
+      ['Ordered (Step 2)', state.orders.filter(function(o){return !o.cancelled&&o.step2&&!o.step3;}).length],
+      ['Received (Complete)', c.received],
+      ['Cancelled', c.cancelled],
+      [''],
+      ['Total Order Value (₹)', totalAmt.toFixed(2)],
+      [''],
+      ['Products in Master List', state.products.length],
+      ['Employees Registered', state.employees.length],
+    ];
+    var wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
+    wsSummary['!cols'] = [{wch:32},{wch:28}];
+    XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
+
+    // Generate filename with date
+    var d = now;
+    var fname = 'PurchaseTracker_Backup_'
+      + d.getFullYear()
+      + String(d.getMonth()+1).padStart(2,'0')
+      + String(d.getDate()).padStart(2,'0')
+      + '_' + String(d.getHours()).padStart(2,'0')
+      + String(d.getMinutes()).padStart(2,'0')
+      + '.xlsx';
+
+    XLSX.writeFile(wb, fname);
+    showMsgBox('Backup Downloaded', 'Full backup saved as ' + fname + '\n\nSheets: All Orders, Pending, Received, Cancelled, Product Master, Employees, Summary.', 'success');
+  } catch(err) {
+    console.error('Backup error:', err);
+    showMsgBox('Backup Failed', 'Could not generate backup: ' + (err.message || err), 'error');
+  }
 }
 
 // ── EMPLOYEE MANAGEMENT ──
