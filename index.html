@@ -194,6 +194,8 @@ if (!CONFIG_FILLED) {
 </script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { -webkit-text-size-adjust: 100%; }
+  button { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
   :root {
     --bg: #F5F4F0; --surface: #FFFFFF; --surface2: #F0EEE9;
     --border: rgba(0,0,0,0.10); --border-strong: rgba(0,0,0,0.18);
@@ -204,7 +206,7 @@ if (!CONFIG_FILLED) {
     --red: #A32D2D; --red-light: #FCEBEB;
     --radius: 10px; --radius-lg: 14px;
   }
-  body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; font-size: 15px; line-height: 1.5; }
+  body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; font-size: 15px; line-height: 1.5; overflow-x: hidden; -webkit-font-smoothing: antialiased; }
   .topbar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 2rem; height: 56px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 50; }
   .topbar-brand { display: flex; align-items: center; gap: 10px; }
   .brand-icon { width: 32px; height: 32px; background: var(--blue); border-radius: 8px; display: flex; align-items: center; justify-content: center; }
@@ -365,58 +367,144 @@ if (!CONFIG_FILLED) {
   .order-card-edits { display:flex;gap:4px;flex-wrap:wrap;margin-top:8px;padding-top:8px;border-top:1px solid var(--border); }
 
   /* ── COMPREHENSIVE MOBILE STYLES ── */
+
+  /* Prevent iOS input zoom (font-size must be ≥16px on inputs) */
+  @media (max-width: 768px) {
+    .form-input, .admin-field, .emp-add-input, select, textarea { font-size: 16px !important; }
+    input[type="date"] { font-size: 16px !important; }
+  }
+
   @media (max-width: 640px) {
-    .topbar { padding: 0 12px; height: 52px; }
-    .brand-name { font-size: 14px; }
+    /* ── Topbar ── */
+    .topbar { padding: 0 10px; height: 52px; gap: 4px; }
+    .brand-name { font-size: 13px; }
     .brand-tag { display: none; }
-    .sync-badge { font-size: 10px; padding: 2px 7px; }
-    .admin-btn { height: 28px; padding: 0 8px; font-size: 11px; margin-left: 4px; }
-    .container { padding: 12px; }
-    .stats-grid { grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 1rem; }
+    .brand-icon { width: 28px; height: 28px; border-radius: 7px; }
+    .brand-icon svg { width: 15px; height: 15px; }
+    .sync-badge { display: none; } /* hide on mobile to save space */
+    .topbar-user { padding: 3px 8px; font-size: 12px; gap: 5px; }
+    .topbar-user-avatar { width: 22px; height: 22px; font-size: 9px; }
+    .topbar-user span { max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .admin-btn { height: 30px; padding: 0 8px; font-size: 11px; margin-left: 2px; }
+
+    /* ── Layout ── */
+    .container { padding: 10px 10px 80px; } /* bottom padding for FAB */
+
+    /* ── Stats grid — 2 cols then wrap ── */
+    .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 7px; margin-bottom: 12px; }
     .stat-card { padding: 10px 12px; }
-    .stat-value { font-size: 20px; }
+    .stat-value { font-size: 22px; }
     .stat-label { font-size: 10px; }
-    .card-head { padding: 10px 12px; gap: 6px; }
+    /* 5th stat card spans full width */
+    .stats-grid .stat-card:nth-child(5) { grid-column: 1 / -1; }
+
+    /* ── Main card header ── */
+    .card-head { padding: 10px 12px; gap: 6px; flex-direction: column; align-items: stretch; }
     .card-head-title { font-size: 14px; }
-    .tab-bar { width: 100%; }
-    .tab { font-size: 11px; padding: 0 5px; }
-    .btn { height: 34px; font-size: 12px; padding: 0 12px; }
-    .btn-sm { height: 28px; font-size: 11px; padding: 0 8px; }
+    .card-head > div:last-child { display: flex; gap: 6px; align-items: center; }
+    .tab-bar { flex: 1; }
+    .tab { font-size: 11px; padding: 0 4px; height: 26px; }
+
+    /* ── Buttons ── */
+    .btn { height: 36px; font-size: 13px; padding: 0 12px; }
+    .btn-sm { height: 30px; font-size: 12px; padding: 0 9px; border-radius: 8px; }
+
+    /* ── Table → Cards ── */
     .table-wrap { display: none; }
-    .mobile-cards-wrap { display: block !important; }
-    .order-card { display: block; }
-    .filter-bar { padding: 8px 12px; gap: 6px; }
-    .filter-label { font-size: 11px; }
-    .filter-date { height: 30px; font-size: 12px; padding: 0 8px; flex: 1; min-width: 0; }
-    .filter-result { width: 100%; margin-left: 0; font-size: 11px; }
-    .master-bar { padding: 8px 12px; }
-    .master-bar-text { font-size: 12px; width: 100%; flex: none; }
-    .form-section { padding: 14px; }
+    .mobile-cards-wrap { display: block !important; padding: 8px 8px 4px !important; }
+    .order-card { display: block; padding: 12px 14px; margin-bottom: 8px; border-radius: 12px; }
+    .order-card-name { font-size: 14px; }
+    .order-card-id { font-size: 11px; }
+    .order-card-actions { gap: 6px; }
+    .order-card-actions .btn-sm { height: 32px; font-size: 12px; }
+
+    /* ── Filter bar ── */
+    .filter-bar { padding: 8px 10px; gap: 6px; flex-wrap: wrap; }
+    .filter-label { font-size: 11px; width: 100%; }
+    .filter-date { height: 34px; font-size: 14px; padding: 0 8px; flex: 1; min-width: 100px; }
+    .filter-sep { font-size: 12px; }
+    .filter-result { width: 100%; margin-left: 0; font-size: 11px; padding-top: 2px; }
+
+    /* ── Master bar ── */
+    .master-bar { padding: 8px 10px; gap: 8px; flex-direction: column; align-items: flex-start; }
+    .master-bar-text { font-size: 12px; width: 100%; }
+
+    /* ── Forms ── */
+    .form-section { padding: 14px 12px; border-radius: 12px; }
+    .form-section-header { margin-bottom: 12px; flex-wrap: wrap; gap: 6px; }
+    .form-section-title { font-size: 15px; }
     .form-grid { grid-template-columns: 1fr; gap: 10px; margin-bottom: 10px; }
-    .form-input { height: 44px; font-size: 15px; }
+    .form-input { height: 46px; padding: 0 14px; border-radius: 10px; }
     .form-label { font-size: 11px; }
-    .form-actions { flex-direction: column-reverse; gap: 8px; }
-    .form-actions .btn { width: 100%; justify-content: center; height: 44px; font-size: 14px; }
-    .stepper { margin-bottom: 1.25rem; }
-    .step-line { width: 28px; }
-    .step-num { width: 32px; height: 32px; font-size: 13px; }
+    .form-actions { flex-direction: column-reverse; gap: 8px; padding-top: 14px; }
+    .form-actions .btn { width: 100%; justify-content: center; height: 46px; font-size: 14px; border-radius: 12px; }
+
+    /* ── Order ref ── */
+    .order-ref { font-size: 12px; padding: 7px 10px; }
+
+    /* ── Stepper ── */
+    .stepper { margin-bottom: 16px; }
+    .step-line { width: 32px; }
+    .step-num { width: 34px; height: 34px; font-size: 13px; }
     .step-name { font-size: 10px; }
+
+    /* ── Modals slide up from bottom ── */
     .modal-overlay { padding: 0; align-items: flex-end; }
-    .modal { border-radius: 18px 18px 0 0; max-width: 100%; max-height: 94vh; padding: 1.25rem; }
+    .modal { border-radius: 20px 20px 0 0; max-width: 100%; max-height: 92vh; padding: 1.25rem 1rem 1.5rem; }
     .modal-product { font-size: 16px; }
+    .detail-row { flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 12px; }
+    .detail-value { text-align: left; max-width: 100%; font-size: 13px; }
+    .detail-label { font-size: 11px; }
+
+    /* ── Admin panel ── */
     .admin-overlay { padding: 0; align-items: flex-end; }
-    .admin-modal { border-radius: 18px 18px 0 0; max-width: 100%; padding: 1.5rem 1.25rem 2rem; }
+    .admin-modal { border-radius: 20px 20px 0 0; max-width: 100%; padding: 1.5rem 1.25rem 2.5rem; }
+
+    /* ── Employee management panel ── */
     .emp-mgmt-overlay { padding: 0; align-items: flex-end; }
-    .emp-mgmt-modal { border-radius: 18px 18px 0 0; max-width: 100%; max-height: 90vh; }
-    .order-ref { font-size: 12px; padding: 6px 10px; }
-    .form-section-header { margin-bottom: 1rem; }
+    .emp-mgmt-modal { border-radius: 20px 20px 0 0; max-width: 100%; max-height: 88vh; }
+    .emp-mgmt-head { padding: 1rem 1.25rem; }
+    .emp-mgmt-body { padding: 1rem 1.25rem; }
+    .emp-add-row { flex-direction: column; gap: 8px; }
+    .emp-add-input { width: 100%; height: 44px; }
+    .emp-add-btn { width: 100%; height: 44px; font-size: 14px; }
+
+    /* ── Employee login screen ── */
+    .emp-login-screen { padding: 0; align-items: flex-end; background: rgba(0,0,0,0.45); }
+    .emp-login-card { border-radius: 20px 20px 0 0; max-width: 100%; padding: 1.5rem 1.25rem 2rem; max-height: 88vh; overflow-y: auto; box-shadow: 0 -8px 40px rgba(0,0,0,0.18); }
+    .emp-login-logo { margin-bottom: 1.25rem; }
+    .emp-login-title { font-size: 18px; }
+    .emp-login-heading { font-size: 14px; }
+    .emp-login-desc { font-size: 13px; margin-bottom: 1.25rem; }
+    .emp-login-list { max-height: 45vh; }
+    .emp-login-item { padding: 12px 14px; }
+    .emp-login-name { font-size: 15px; }
+    .emp-login-btn { height: 48px; font-size: 15px; border-radius: 12px; }
+    .emp-login-viewonly-btn { height: 42px; font-size: 13px; border-radius: 12px; margin-top: 8px; }
+
+    /* ── Cancel box ── */
     .cancel-box > div:last-of-type { flex-direction: column; gap: 8px; }
     .cancel-box #f-cancelledDate { width: 100%; }
-    .emp-wrap .emp-dd { font-size: 14px; }
+
+    /* ── Employee dropdown ── */
+    .emp-dd-item { padding: 11px 12px; font-size: 14px; }
   }
-  @media (max-width: 380px) {
-    .admin-btn .admin-badge { display: none; }
-    .brand-icon { width: 28px; height: 28px; }
+
+  @media (max-width: 400px) {
+    .topbar { padding: 0 8px; }
+    .brand-name { font-size: 12px; }
+    .admin-btn { padding: 0 6px; font-size: 10px; }
+    .admin-badge { display: none; }
+    .topbar-user span { max-width: 60px; }
+    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    .tab { font-size: 10px; padding: 0 3px; }
+    .emp-login-list { max-height: 38vh; }
+  }
+
+  /* ── FAB always shows on mobile ── */
+  @media (max-width: 640px) {
+    .fab-new-order { display: flex !important; bottom: 20px; right: 16px; width: 52px; height: 52px; font-size: 24px; }
+    .card-head .btn-primary { display: none; }
   }
 
   /* Floating Action Button for mobile */
@@ -440,11 +528,6 @@ if (!CONFIG_FILLED) {
     transition: background 0.15s, transform 0.15s;
   }
   .fab-new-order:active { background: #0C447C; transform: scale(0.94); }
-  @media (max-width: 640px) {
-    .fab-new-order { display: flex; }
-    .card-head .btn-primary { display: none; }
-    .card-head > div:last-child { flex-direction: column-reverse; align-items: flex-start; }
-  }
 
   /* Employee dropdown */
   .emp-wrap { position:relative; }
