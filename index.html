@@ -27,6 +27,11 @@ const CONFIG_FILLED = FIREBASE_CONFIG.apiKey !== "YOUR_API_KEY" && FIREBASE_CONF
 if (!CONFIG_FILLED) {
   window._firestoreReady = false;
   window._fbNotConfigured = true;
+  // Show offline badge immediately
+  document.addEventListener('DOMContentLoaded', function() {
+    var b = document.getElementById('sync-badge');
+    if (b) { b.className = 'sync-badge offline'; b.textContent = '● Offline'; }
+  });
 } else {
   try {
     const { initializeApp } = await import('https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js');
@@ -37,6 +42,11 @@ if (!CONFIG_FILLED) {
     const db  = getFirestore(app);
 
     window._firestoreReady = true;
+    // Refresh login screen now that Firebase is ready (it may be showing "Connecting…")
+    var loginRoot = document.getElementById('emp-login-screen-root');
+    if (loginRoot && loginRoot.innerHTML !== '') {
+      window._render && window._render();
+    }
 
     // ── Save order ──
     window._fbSaveOrder = async function(order) {
@@ -527,7 +537,7 @@ if (!CONFIG_FILLED) {
     </div>
   </div>
   <div style="display:flex;align-items:center;gap:8px;">
-    <span id="sync-badge" class="sync-badge offline">● Offline</span>
+    <span id="sync-badge" class="sync-badge connecting">◌ Connecting…</span>
     <div id="topbar-user-area"></div>
     <button id="admin-topbar-btn" class="admin-btn" onclick="openAdminPanel()">&#128274; Admin</button>
   </div>
@@ -575,9 +585,17 @@ function renderEmpLoginScreen() {
   if (!root) return;
 
   var hasEmps = state.employees.length > 0;
+  var isConnecting = !window._firestoreReady && !window._fbNotConfigured;
   var listHtml = '';
 
-  if (!hasEmps) {
+  if (isConnecting && !hasEmps) {
+    // Firebase is still loading — show spinner, data will arrive soon and re-render
+    listHtml = '<div class="emp-login-empty">'
+      + '<div style="font-size:28px;margin-bottom:10px;">&#9729;</div>'
+      + '<div style="font-weight:500;">Connecting to server…</div>'
+      + '<div style="font-size:12px;margin-top:4px;color:var(--text-hint);">Loading employee list, please wait.</div>'
+      + '</div>';
+  } else if (!hasEmps) {
     listHtml = '<div class="emp-login-empty"><div class="emp-login-empty-icon">&#128100;</div>'
       + '<div>No employees registered yet.</div>'
       + '<div style="margin-top:4px;font-size:12px;">Ask the Admin to add employees first.</div>'
@@ -608,6 +626,7 @@ function renderEmpLoginScreen() {
     + '</div></div>';
 
   window._empLoginSelectedIdx = -1;
+  _empLoginSelectedIdx = -1;
 }
 
 var _empLoginSelectedIdx = -1;
@@ -1608,7 +1627,14 @@ function clearDateFilter() { state.dateFrom = ''; state.dateTo = ''; render(); }
 
 // ── EXPOSE TO FIREBASE MODULE ──
 window._state = state;
-window._render = function() { render(); };
+window._render = function() {
+  // If the login screen overlay is currently showing, refresh it (employee list may have just loaded from Firebase)
+  var loginRoot = document.getElementById('emp-login-screen-root');
+  if (loginRoot && loginRoot.innerHTML !== '') {
+    renderEmpLoginScreen();
+  }
+  render();
+};
 
 // ── RENDER ──
 function render() {
