@@ -213,6 +213,7 @@ if (!CONFIG_FILLED) {
   .brand-icon svg { width: 18px; height: 18px; fill: #fff; }
   .brand-name { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
   .brand-tag { font-size: 11px; color: var(--text-secondary); margin-left: 2px; }
+  .brand-dev { font-size:10px;color:var(--text-hint);display:block;line-height:1;margin-top:1px;letter-spacing:0.01em; }
   .container { max-width: 980px; margin: 0 auto; padding: 2rem 1.5rem; }
   .stats-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 1.5rem; }
   .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
@@ -506,6 +507,7 @@ if (!CONFIG_FILLED) {
   @media (max-width: 400px) {
     .topbar { padding: 0 8px; }
     .brand-name { font-size: 12px; }
+    .brand-dev { font-size:9px; display:block !important; }
     .admin-btn { padding: 0 8px; font-size: 13px; }
     .admin-badge { display: none; }
     .stats-grid { gap: 6px; }
@@ -631,7 +633,7 @@ if (!CONFIG_FILLED) {
     <div>
       <span class="brand-name">PurchaseTracker</span>
       <span class="brand-tag">v15.0</span>
-      <span style="font-size:10px;color:var(--text-hint);display:block;line-height:1;margin-top:1px;letter-spacing:0.01em;">Developed by Kuntal Mandal</span>
+      <span class="brand-dev">Developed by Kuntal Mandal</span>
     </div>
   </div>
   <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
