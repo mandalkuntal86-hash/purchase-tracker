@@ -377,15 +377,23 @@ if (!CONFIG_FILLED) {
   @media (max-width: 640px) {
     /* ── Topbar ── */
     .topbar { padding: 0 10px; height: 52px; gap: 4px; }
+    .topbar-brand { flex-shrink: 0; }
     .brand-name { font-size: 13px; }
     .brand-tag { display: none; }
-    .brand-icon { width: 28px; height: 28px; border-radius: 7px; }
+    .brand-icon { width: 28px; height: 28px; border-radius: 7px; flex-shrink: 0; }
     .brand-icon svg { width: 15px; height: 15px; }
-    .sync-badge { display: none; } /* hide on mobile to save space */
-    .topbar-user { padding: 3px 8px; font-size: 12px; gap: 5px; }
-    .topbar-user-avatar { width: 22px; height: 22px; font-size: 9px; }
-    .topbar-user span { max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .admin-btn { height: 30px; padding: 0 8px; font-size: 11px; margin-left: 2px; }
+    .sync-badge { display: none; }
+    /* User chip — show avatar only, hide name text */
+    .topbar-user { padding: 3px 8px; font-size: 12px; gap: 5px; flex-shrink: 0; }
+    .topbar-user-avatar { width: 26px; height: 26px; font-size: 10px; flex-shrink: 0; }
+    .topbar-user-name { display: none; }
+    .topbar-user-logout { font-size: 14px; }
+    /* Admin button — show lock icon only, hide "Admin" text */
+    .admin-btn { height: 32px; padding: 0 10px; font-size: 14px; margin-left: 0; flex-shrink: 0; }
+    .admin-btn-label { display: none; }
+    .admin-btn.logged-in .admin-badge { margin-left: 2px; font-size: 9px; padding: 1px 4px; }
+    /* Login button */
+    .topbar-login-btn { padding: 0 10px; }
 
     /* ── Layout ── */
     .container { padding: 10px 10px 80px; } /* bottom padding for FAB */
@@ -456,9 +464,14 @@ if (!CONFIG_FILLED) {
     .detail-value { text-align: left; max-width: 100%; font-size: 13px; }
     .detail-label { font-size: 11px; }
 
-    /* ── Admin panel ── */
+    /* ── Admin panel slides up from bottom ── */
     .admin-overlay { padding: 0; align-items: flex-end; }
     .admin-modal { border-radius: 20px 20px 0 0; max-width: 100%; padding: 1.5rem 1.25rem 2.5rem; }
+    .admin-login-btn { height: 50px; font-size: 15px; border-radius: 12px; }
+    .admin-cancel-btn { height: 46px; font-size: 14px; border-radius: 12px; }
+    .admin-field { height: 48px; border-radius: 12px; }
+    .admin-modal-title { font-size: 17px; }
+    .admin-modal-sub { font-size: 13px; }
 
     /* ── Employee management panel ── */
     .emp-mgmt-overlay { padding: 0; align-items: flex-end; }
@@ -493,10 +506,9 @@ if (!CONFIG_FILLED) {
   @media (max-width: 400px) {
     .topbar { padding: 0 8px; }
     .brand-name { font-size: 12px; }
-    .admin-btn { padding: 0 6px; font-size: 10px; }
+    .admin-btn { padding: 0 8px; font-size: 13px; }
     .admin-badge { display: none; }
-    .topbar-user span { max-width: 60px; }
-    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    .stats-grid { gap: 6px; }
     .tab { font-size: 10px; padding: 0 3px; }
     .emp-login-list { max-height: 38vh; }
   }
@@ -577,6 +589,7 @@ if (!CONFIG_FILLED) {
   .admin-cancel-btn { height:36px;width:100%;border-radius:10px;border:1px solid rgba(0,0,0,0.18);background:transparent;color:#6B6A66;font-size:13px;font-weight:500;cursor:pointer;font-family:'DM Sans',sans-serif; }
   .admin-cancel-btn:hover { background:#F0EEE9; }
   .admin-badge { display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;background:#185FA5;color:#fff;text-transform:uppercase;letter-spacing:0.06em;margin-left:8px;vertical-align:middle; }
+  .topbar-login-btn { background:var(--blue) !important; color:#fff !important; border-color:var(--blue) !important; margin-left:0; }
 
   /* ── Employee Login Screen ── */
   .emp-login-screen { position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:1000;padding:1rem; }
@@ -620,10 +633,10 @@ if (!CONFIG_FILLED) {
       <span class="brand-tag">v15.0</span>
     </div>
   </div>
-  <div style="display:flex;align-items:center;gap:8px;">
+  <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
     <span id="sync-badge" class="sync-badge connecting">◌ Connecting…</span>
     <div id="topbar-user-area"></div>
-    <button id="admin-topbar-btn" class="admin-btn" onclick="openAdminPanel()">&#128274; Admin</button>
+    <button id="admin-topbar-btn" class="admin-btn" onclick="openAdminPanel()">&#128274; <span class="admin-btn-label">Admin</span></button>
   </div>
 </div>
 <div id="admin-panel-root"></div>
@@ -761,11 +774,11 @@ function updateTopbarUserArea() {
     var initials = name.split(' ').map(function(w){ return w[0]||''; }).join('').slice(0,2).toUpperCase();
     area.innerHTML = '<div class="topbar-user">'
       + '<div class="topbar-user-avatar">' + initials + '</div>'
-      + '<span>' + esc(name) + '</span>'
+      + '<span class="topbar-user-name">' + esc(name) + '</span>'
       + '<button class="topbar-user-logout" onclick="employeeLogout()" title="Switch / Logout">&#8594;&#128275;</button>'
       + '</div>';
   } else {
-    area.innerHTML = '<button class="admin-btn" onclick="renderEmpLoginScreen()" style="background:var(--blue);color:#fff;border-color:var(--blue);">&#128100; Login</button>';
+    area.innerHTML = '<button class="admin-btn topbar-login-btn" onclick="renderEmpLoginScreen()">&#128100; <span class="admin-btn-label">Login</span></button>';
   }
 }
 function _showSyncErrorHint(code) {
@@ -798,11 +811,11 @@ function updateAdminTopbarBtn() {
   if (!btn) return;
   if (state.adminLoggedIn) {
     btn.className = 'admin-btn logged-in';
-    btn.innerHTML = '&#128513; Admin <span class="admin-badge">ON</span>';
+    btn.innerHTML = '&#128513; <span class="admin-btn-label">Admin</span> <span class="admin-badge">ON</span>';
     btn.title = 'Admin logged in — click to logout';
   } else {
     btn.className = 'admin-btn';
-    btn.innerHTML = '&#128274; Admin';
+    btn.innerHTML = '&#128274; <span class="admin-btn-label">Admin</span>';
     btn.title = 'Admin login';
   }
 }
