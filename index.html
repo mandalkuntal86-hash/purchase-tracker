@@ -483,9 +483,38 @@ if (!CONFIG_FILLED) {
   .admin-cancel-btn { height:36px;width:100%;border-radius:10px;border:1px solid rgba(0,0,0,0.18);background:transparent;color:#6B6A66;font-size:13px;font-weight:500;cursor:pointer;font-family:'DM Sans',sans-serif; }
   .admin-cancel-btn:hover { background:#F0EEE9; }
   .admin-badge { display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;background:#185FA5;color:#fff;text-transform:uppercase;letter-spacing:0.06em;margin-left:8px;vertical-align:middle; }
+
+  /* ── Employee Login Screen ── */
+  .emp-login-screen { position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:1000;padding:1rem; }
+  .emp-login-card { background:#fff;border:1px solid var(--border);border-radius:18px;padding:2.5rem 2rem;width:100%;max-width:420px;box-shadow:0 8px 40px rgba(0,0,0,0.10); }
+  .emp-login-logo { display:flex;align-items:center;gap:10px;margin-bottom:2rem; }
+  .emp-login-brand-icon { width:40px;height:40px;background:var(--blue);border-radius:10px;display:flex;align-items:center;justify-content:center; }
+  .emp-login-brand-icon svg { width:22px;height:22px;fill:#fff; }
+  .emp-login-title { font-size:20px;font-weight:700;letter-spacing:-0.01em; }
+  .emp-login-subtitle { font-size:13px;color:var(--text-secondary);margin-top:2px; }
+  .emp-login-heading { font-size:15px;font-weight:600;margin-bottom:4px; }
+  .emp-login-desc { font-size:13px;color:var(--text-secondary);margin-bottom:1.75rem; }
+  .emp-login-list { display:flex;flex-direction:column;gap:6px;max-height:260px;overflow-y:auto;margin-bottom:1.25rem; }
+  .emp-login-item { display:flex;align-items:center;gap:10px;padding:10px 14px;border:1.5px solid var(--border);border-radius:10px;cursor:pointer;transition:all 0.15s;background:#fff; }
+  .emp-login-item:hover { border-color:var(--blue-mid);background:var(--blue-light); }
+  .emp-login-item.selected { border-color:var(--blue);background:var(--blue-light); }
+  .emp-login-avatar { width:32px;height:32px;border-radius:50%;background:var(--blue-light);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:var(--blue);flex-shrink:0;text-transform:uppercase; }
+  .emp-login-name { font-size:14px;font-weight:500; }
+  .emp-login-btn { height:42px;width:100%;border-radius:10px;border:none;background:var(--blue);color:#fff;font-size:14px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all 0.15s; }
+  .emp-login-btn:hover { background:#0C447C; }
+  .emp-login-btn:disabled { opacity:0.45;cursor:not-allowed; }
+  .emp-login-empty { text-align:center;padding:2rem 1rem;color:var(--text-hint);font-size:13px; }
+  .emp-login-empty-icon { font-size:28px;margin-bottom:8px; }
+  .topbar-user { display:flex;align-items:center;gap:7px;background:var(--blue-light);border:1px solid rgba(24,95,165,0.2);border-radius:8px;padding:4px 12px;font-size:13px;font-weight:500;color:var(--blue); }
+  .topbar-user-avatar { width:24px;height:24px;border-radius:50%;background:var(--blue);color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;text-transform:uppercase; }
+  .topbar-user-logout { background:none;border:none;cursor:pointer;color:var(--blue);font-size:16px;margin-left:4px;padding:0;line-height:1;opacity:0.7; }
+  .emp-login-viewonly-btn { height:38px;width:100%;border-radius:10px;border:1px solid var(--border-strong);background:transparent;color:var(--text-secondary);font-size:13px;font-weight:500;cursor:pointer;font-family:'DM Sans',sans-serif;margin-top:8px;transition:all 0.15s; }
+  .emp-login-viewonly-btn:hover { background:var(--surface2); }
 </style>
 </head>
 <body>
+
+<div id="emp-login-screen-root"></div>
 
 <div class="topbar">
   <div class="topbar-brand">
@@ -499,6 +528,7 @@ if (!CONFIG_FILLED) {
   </div>
   <div style="display:flex;align-items:center;gap:8px;">
     <span id="sync-badge" class="sync-badge offline">● Offline</span>
+    <div id="topbar-user-area"></div>
     <button id="admin-topbar-btn" class="admin-btn" onclick="openAdminPanel()">&#128274; Admin</button>
   </div>
 </div>
@@ -527,7 +557,8 @@ let state = {
   modal: null,
   editId: null,
   highlightIdx: -1,
-  adminLoggedIn: false
+  adminLoggedIn: false,
+  loggedInEmployee: null   // name of the currently logged-in employee
 };
 
 function save(changedOrder) {
@@ -535,6 +566,98 @@ function save(changedOrder) {
   if (changedOrder && window._fbSaveOrder) {
     _setSyncStatus('syncing');
     window._fbSaveOrder(changedOrder);
+  }
+}
+
+// ── EMPLOYEE LOGIN SCREEN ──
+function renderEmpLoginScreen() {
+  var root = document.getElementById('emp-login-screen-root');
+  if (!root) return;
+
+  var hasEmps = state.employees.length > 0;
+  var listHtml = '';
+
+  if (!hasEmps) {
+    listHtml = '<div class="emp-login-empty"><div class="emp-login-empty-icon">&#128100;</div>'
+      + '<div>No employees registered yet.</div>'
+      + '<div style="margin-top:4px;font-size:12px;">Ask the Admin to add employees first.</div>'
+      + '</div>';
+  } else {
+    listHtml = '<div class="emp-login-list" id="emp-login-list">'
+      + state.employees.map(function(name, i) {
+          var initials = name.split(' ').map(function(w){ return w[0]||''; }).join('').slice(0,2).toUpperCase();
+          return '<div class="emp-login-item" id="empli-' + i + '" onclick="selectEmpLogin(' + i + ')">'
+            + '<div class="emp-login-avatar">' + initials + '</div>'
+            + '<div class="emp-login-name">' + esc(name) + '</div>'
+            + '</div>';
+        }).join('')
+      + '</div>';
+  }
+
+  root.innerHTML = '<div class="emp-login-screen">'
+    + '<div class="emp-login-card">'
+    + '<div class="emp-login-logo">'
+    + '<div class="emp-login-brand-icon"><svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg></div>'
+    + '<div><div class="emp-login-title">PurchaseTracker</div><div class="emp-login-subtitle">v15.0 &mdash; ELDO</div></div>'
+    + '</div>'
+    + '<div class="emp-login-heading">&#128101; Select Your Name to Continue</div>'
+    + '<div class="emp-login-desc">Choose your employee profile to create and manage orders. Your name will be auto-filled in all order fields.</div>'
+    + listHtml
+    + '<button class="emp-login-btn" id="emp-login-go-btn" onclick="confirmEmpLogin()" ' + (!hasEmps ? 'disabled' : '') + '>&#128275; Login &amp; Work</button>'
+    + '<button class="emp-login-viewonly-btn" onclick="viewOnlyMode()">&#128065; View Only (no login)</button>'
+    + '</div></div>';
+
+  window._empLoginSelectedIdx = -1;
+}
+
+var _empLoginSelectedIdx = -1;
+
+function selectEmpLogin(idx) {
+  _empLoginSelectedIdx = idx;
+  document.querySelectorAll('.emp-login-item').forEach(function(el, i){
+    el.classList.toggle('selected', i === idx);
+  });
+  var btn = document.getElementById('emp-login-go-btn');
+  if (btn) btn.disabled = false;
+}
+
+function confirmEmpLogin() {
+  if (_empLoginSelectedIdx < 0 || _empLoginSelectedIdx >= state.employees.length) return;
+  state.loggedInEmployee = state.employees[_empLoginSelectedIdx];
+  document.getElementById('emp-login-screen-root').innerHTML = '';
+  updateTopbarUserArea();
+  render();
+}
+
+function viewOnlyMode() {
+  state.loggedInEmployee = null;
+  document.getElementById('emp-login-screen-root').innerHTML = '';
+  updateTopbarUserArea();
+  render();
+}
+
+function employeeLogout() {
+  state.loggedInEmployee = null;
+  state.view = 'list';
+  _empLoginSelectedIdx = -1;
+  renderEmpLoginScreen();
+  updateTopbarUserArea();
+  render();
+}
+
+function updateTopbarUserArea() {
+  var area = document.getElementById('topbar-user-area');
+  if (!area) return;
+  if (state.loggedInEmployee) {
+    var name = state.loggedInEmployee;
+    var initials = name.split(' ').map(function(w){ return w[0]||''; }).join('').slice(0,2).toUpperCase();
+    area.innerHTML = '<div class="topbar-user">'
+      + '<div class="topbar-user-avatar">' + initials + '</div>'
+      + '<span>' + esc(name) + '</span>'
+      + '<button class="topbar-user-logout" onclick="employeeLogout()" title="Switch / Logout">&#8594;&#128275;</button>'
+      + '</div>';
+  } else {
+    area.innerHTML = '<button class="admin-btn" onclick="renderEmpLoginScreen()" style="background:var(--blue);color:#fff;border-color:var(--blue);">&#128100; Login</button>';
   }
 }
 function _showSyncErrorHint(code) {
@@ -671,7 +794,7 @@ function exportBackupExcel() {
 
     // ── Sheet 1: All Orders (full detail) ──
     var ordersData = [
-      ['Order ID','Product Name','Request Date','Status',
+      ['Order ID','Product Name','Request Date','Requested By','Status',
        'Ordered By','Order Date','Quantity','Rate (₹)','Vendor','Notes',
        'Received By','Received Date','Checked By','Check Date','Invoice No','Remarks',
        'Cancelled','Cancel Reason','Cancelled By','Cancelled Date']
@@ -686,6 +809,7 @@ function exportBackupExcel() {
         o.id || '',
         s1.productName || '',
         s1.date || '',
+        s1.requestedBy || '',
         status,
         s2.orderedBy || '',
         s2.orderDate || '',
@@ -1028,26 +1152,30 @@ function renderList() {
     return true;
   });
 
-  const emptyRow = '<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">📋</div>No orders yet. Click "+ New Order" to begin.</div></td></tr>';
-  const emptyCard = '<div class="empty-state"><div class="empty-icon">📋</div>No orders yet. Tap "+ New Order" to begin.</div>';
+  const emptyRow = '<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">📋</div>No orders yet.' + (state.loggedInEmployee ? ' Click "+ New Order" to begin.' : '') + '</div></td></tr>';
+  const emptyCard = '<div class="empty-state"><div class="empty-icon">📋</div>No orders yet.' + (state.loggedInEmployee ? ' Tap "+ New Order" to begin.' : '') + '</div>';
+
+  const isViewOnly = !state.loggedInEmployee;
 
   let rows = filtered.length === 0 ? emptyRow : '';
   let mobileCards = filtered.length === 0 ? emptyCard : '';
 
   filtered.forEach(function(o) {
         const s = getStatus(o);
-        const nextBtn = !o.step2
-          ? '<button class="btn btn-sm btn-primary" onclick="goStep2(\'' + o.id + '\')">+ Step 2</button>'
-          : !o.step3
-          ? '<button class="btn btn-sm btn-success" onclick="goStep3(\'' + o.id + '\')">+ Step 3</button>'
-          : '<span style="font-size:12px;color:var(--green);font-weight:600;">&#10003; Complete</span>';
+        const nextBtn = isViewOnly
+          ? '<span style="font-size:11px;color:var(--text-hint);padding:0 8px;">&#128274; Login</span>'
+          : (!o.step2
+            ? '<button class="btn btn-sm btn-primary" onclick="goStep2(\'' + o.id + '\')">+ Step 2</button>'
+            : !o.step3
+            ? '<button class="btn btn-sm btn-success" onclick="goStep3(\'' + o.id + '\')">+ Step 3</button>'
+            : '<span style="font-size:12px;color:var(--green);font-weight:600;">&#10003; Complete</span>');
         const s1Locked = !!(o.step2 || o.step3 || o.cancelled);
         const s2Locked = !!o.step3;
         const s3Locked = !!o.step3;
         const lockIcon = '<span title="Locked" style="display:inline-flex;align-items:center;padding:0 8px;height:28px;font-size:12px;border-radius:7px;color:var(--text-hint);border:1px solid var(--border);background:var(--surface2);cursor:not-allowed;">&#128274;</span>';
-        const editS1 = s1Locked ? lockIcon : '<button class="btn btn-sm btn-edit btn-ghost" onclick="goEditStep1(\'' + o.id + '\')" title="Edit Step 1">&#9998; S1</button>';
-        const editS2 = o.step2 ? (s2Locked ? lockIcon : '<button class="btn btn-sm btn-edit btn-ghost" onclick="goEditStep2(\'' + o.id + '\')" title="Edit Step 2">&#9998; S2</button>') : '';
-        const editS3 = o.step3 ? (s3Locked ? lockIcon : '<button class="btn btn-sm btn-edit btn-ghost" onclick="goEditStep3(\'' + o.id + '\')" title="Edit Step 3">&#9998; S3</button>') : '';
+        const editS1 = isViewOnly ? '' : (s1Locked ? lockIcon : '<button class="btn btn-sm btn-edit btn-ghost" onclick="goEditStep1(\'' + o.id + '\')" title="Edit Step 1">&#9998; S1</button>');
+        const editS2 = isViewOnly ? '' : (o.step2 ? (s2Locked ? lockIcon : '<button class="btn btn-sm btn-edit btn-ghost" onclick="goEditStep2(\'' + o.id + '\')" title="Edit Step 2">&#9998; S2</button>') : '');
+        const editS3 = isViewOnly ? '' : (o.step3 ? (s3Locked ? lockIcon : '<button class="btn btn-sm btn-edit btn-ghost" onclick="goEditStep3(\'' + o.id + '\')" title="Edit Step 3">&#9998; S3</button>') : '');
         const delBtn = state.adminLoggedIn ? '<button class="btn btn-sm btn-danger btn-ghost" onclick="deleteOrder(\'' + o.id + '\')">&#128465; Delete</button>' : '';
 
         rows += '<tr>'
@@ -1105,12 +1233,20 @@ function renderList() {
     ? '<div class="firebase-config-banner">&#9888; <strong>Firebase not connected.</strong> Data is saved locally only. Open the HTML file, fill in your Firebase config at the top of the &lt;script type="module"&gt; block, then re-upload to GitHub.</div>'
     : '';
 
+  const viewOnlyBanner = isViewOnly
+    ? '<div style="background:#FAEEDA;border-bottom:1px solid rgba(133,79,11,0.2);padding:9px 1.25rem;display:flex;align-items:center;gap:8px;font-size:13px;color:#854F0B;">'
+      + '<span>&#128065; <strong>View Only Mode</strong> &mdash; You can view orders but cannot create or edit them.</span>'
+      + '<button class="btn btn-sm btn-amber" style="margin-left:auto;" onclick="renderEmpLoginScreen()">&#128100; Login to Work</button>'
+      + '</div>'
+    : '';
+
   return fbBanner + '<div class="main-card">'
     + '<div class="card-head"><div class="card-head-title">Purchase Orders</div>'
     + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
     + '<div class="tab-bar">' + tabs + '</div>'
-    + '<button class="btn btn-primary" onclick="goNew()">+ New Order</button>'
+    + (isViewOnly ? '' : '<button class="btn btn-primary" onclick="goNew()">+ New Order</button>')
     + '</div></div>'
+    + viewOnlyBanner
     + filterBar
     + masterBar
     + '<div class="table-wrap"><table>'
@@ -1140,14 +1276,19 @@ function stepperHtml(active, isEdit) {
 function renderStep1() {
   const hasProducts = state.products.length > 0;
   const hint = !hasProducts ? '<div class="no-products-hint">&#9888; No product list uploaded. You can type manually.</div>' : '';
+  const empName = state.loggedInEmployee || '';
   return stepperHtml(1, false)
     + '<div class="form-section">'
     + '<div class="form-section-header"><span class="step-badge sb-1">Step 1</span><span class="form-section-title">Raise Purchase Request</span></div>'
     + hint
     + '<div class="form-grid single"><div class="form-group"><label class="form-label">Product Name *</label>'
     + productSearchField('', hasProducts) + '</div></div>'
-    + '<div class="form-grid"><div class="form-group"><label class="form-label">Request Date *</label>'
-    + '<input class="form-input" type="date" id="f-date" value="' + today() + '"></div></div>'
+    + '<div class="form-grid">'
+    + '<div class="form-group"><label class="form-label">Request Date *</label>'
+    + '<input class="form-input" type="date" id="f-date" value="' + today() + '"></div>'
+    + '<div class="form-group"><label class="form-label">Requested By</label>'
+    + '<input class="form-input" type="text" id="f-requestedBy" value="' + esc(empName) + '" readonly style="background:var(--surface2);color:var(--text-secondary);cursor:not-allowed;" title="Auto-filled from your login"></div>'
+    + '</div>'
     + '<div class="form-actions"><button class="btn btn-ghost" onclick="goList()">Cancel</button>'
     + '<button class="btn btn-primary" onclick="saveStep1(false)">Save &amp; Continue &#8594;</button></div></div>';
 }
@@ -1171,11 +1312,12 @@ function renderStep1Edit() {
 // ── STEP 2 FORM (New) ──
 function renderStep2() {
   const o = state.orders.find(x => x.id === state.editId);
+  const autoName = state.loggedInEmployee || '';
   return stepperHtml(2, false)
     + '<div class="form-section">'
     + '<div class="form-section-header"><span class="step-badge sb-2">Step 2</span><span class="form-section-title">Order Details</span></div>'
     + '<div class="order-ref">Order <strong>' + esc(o.id) + '</strong> &mdash; ' + esc(o.step1.productName) + '</div>'
-    + step2Fields('', '', '', '', '', '', false, o.cancelled||null) + '</div>';
+    + step2Fields(autoName, '', '', '', '', '', false, o.cancelled||null) + '</div>';
 }
 
 // ── STEP 2 EDIT ──
@@ -1237,11 +1379,12 @@ function step2Fields(orderedBy, orderDate, qty, vendor, rate, notes2, isEdit, ca
 // ── STEP 3 FORM (New) ──
 function renderStep3() {
   const o = state.orders.find(x => x.id === state.editId);
+  const autoName = state.loggedInEmployee || '';
   return stepperHtml(3, false)
     + '<div class="form-section">'
     + '<div class="form-section-header"><span class="step-badge sb-3">Step 3</span><span class="form-section-title">Receiving &amp; Verification</span></div>'
     + '<div class="order-ref">Order <strong>' + esc(o.id) + '</strong> &mdash; ' + esc(o.step1.productName) + '</div>'
-    + step3Fields('', '', '', '', '', '', false) + '</div>';
+    + step3Fields(autoName, '', autoName, '', '', '', false) + '</div>';
 }
 
 // ── STEP 3 EDIT ──
@@ -1413,7 +1556,7 @@ function renderViewModal(id) {
 
   function detailRows(pairs) { return pairs.filter(Boolean).map(function(p){ return '<div class="detail-row"><span class="detail-label">'+esc(p[0])+'</span><span class="detail-value">'+esc(p[1])+'</span></div>'; }).join(''); }
 
-  const s1Rows = detailRows([['Product', o.step1.productName], ['Request Date', o.step1.date]]);
+  const s1Rows = detailRows([['Product', o.step1.productName], ['Request Date', o.step1.date], o.step1.requestedBy ? ['Requested By', o.step1.requestedBy] : null]);
   const s2Rows = o.cancelled
     ? detailRows([['Status', 'CANCELLED'], ['Reason', o.cancelled.reason], ['Cancelled By', o.cancelled.cancelledBy||'-'], ['Cancelled Date', o.cancelled.cancelledDate||'-']])
     : o.step2 ? detailRows([['Ordered By', o.step2.orderedBy],['Order Date', o.step2.orderDate],['Quantity', o.step2.qty],['Rate / Unit Price', o.step2.rate ? '₹' + o.step2.rate : '-'],['Ordered From', o.step2.vendor], o.step2.notes2?['Notes', o.step2.notes2]:null]) : null;
@@ -1470,6 +1613,7 @@ window._render = function() { render(); };
 // ── RENDER ──
 function render() {
   updateAdminTopbarBtn();
+  updateTopbarUserArea();
   document.getElementById('stats-grid').innerHTML = renderStats();
   const v = state.view;
   let html = '';
@@ -1482,17 +1626,30 @@ function render() {
   else if (v==='step3edit') html = renderStep3Edit();
   document.getElementById('main-content').innerHTML = html;
   document.getElementById('modal-root').innerHTML = state.modal ? renderViewModal(state.modal) : '';
+  // Hide FAB in view-only mode
+  var fab = document.querySelector('.fab-new-order');
+  if (fab) fab.style.display = state.loggedInEmployee ? 'flex' : 'none';
 }
 
 // ── NAVIGATION ──
-function goNew()            { state.view='new';       state.editId=null; render(); }
-function goList()           { state.view='list';      render(); }
-function setTab(t)          { state.tab=t;            render(); }
-function viewOrder(id)      { state.modal=id;         render(); }
-function closeModal()       { state.modal=null;       render(); }
-function goStep2(id)        { state.editId=id; state.view='step2';     render(); }
-function goStep3(id)        { state.editId=id; state.view='step3';     render(); }
+function goNew()            {
+  if (!state.loggedInEmployee) { showMsgBox('Login Required', 'Please login with your employee name to create new orders.', 'error'); return; }
+  state.view='new'; state.editId=null; render();
+}
+function goList()           { state.view='list'; render(); }
+function setTab(t)          { state.tab=t; render(); }
+function viewOrder(id)      { state.modal=id; render(); }
+function closeModal()       { state.modal=null; render(); }
+function goStep2(id) {
+  if (!state.loggedInEmployee) { showMsgBox('Login Required', 'Please login with your employee name to fill order details.', 'error'); return; }
+  state.editId=id; state.view='step2'; render();
+}
+function goStep3(id) {
+  if (!state.loggedInEmployee) { showMsgBox('Login Required', 'Please login with your employee name to mark goods as received.', 'error'); return; }
+  state.editId=id; state.view='step3'; render();
+}
 function goEditStep1(id) {
+  if (!state.loggedInEmployee) { showMsgBox('Login Required', 'Please login to edit orders.', 'error'); return; }
   const o = state.orders.find(x => x.id === id);
   if (o && (o.step2 || o.step3 || o.cancelled)) {
     showMsgBox('Locked', 'Step 1 cannot be edited because Step 2 has already been completed.', 'error'); return;
@@ -1500,6 +1657,7 @@ function goEditStep1(id) {
   state.editId=id; state.view='step1edit'; render();
 }
 function goEditStep2(id) {
+  if (!state.loggedInEmployee) { showMsgBox('Login Required', 'Please login to edit orders.', 'error'); return; }
   const o = state.orders.find(x => x.id === id);
   if (o && o.step3) {
     showMsgBox('Locked', 'Step 2 cannot be edited because Step 3 (Receiving) has already been completed.', 'error'); return;
@@ -1518,15 +1676,17 @@ function goEditStep3(id) {
 function saveStep1(isEdit) {
   const productName = document.getElementById('f-productName').value.trim();
   const date = document.getElementById('f-date').value;
+  const requestedByEl = document.getElementById('f-requestedBy');
+  const requestedBy = requestedByEl ? requestedByEl.value.trim() : (state.loggedInEmployee || '');
   if (!productName) { showMsgBox('Required', 'Please enter or select a product name.', 'error'); return; }
   if (!date) { showMsgBox('Required', 'Please select a request date.', 'error'); return; }
   if (isEdit) {
     const o = state.orders.find(x => x.id === state.editId);
-    o.step1 = { productName, date };
+    o.step1 = { productName, date, requestedBy: o.step1.requestedBy || requestedBy };
     save(o); state.view='list'; render();
     showMsgBox('Updated', 'Step 1 has been updated successfully.', 'success');
   } else {
-    const newOrder = { id: genId(), step1: { productName, date }, step2: null, step3: null };
+    const newOrder = { id: genId(), step1: { productName, date, requestedBy }, step2: null, step3: null };
     state.orders.unshift(newOrder);
     save(newOrder); state.view='list'; render();
   }
@@ -1693,9 +1853,9 @@ function clearProducts() {
   document.getElementById('clr-confirm').onclick = function(){ state.products=[]; saveProducts(); document.body.removeChild(overlay); render(); };
 }
 
+// Start in view-only mode — show the login screen as an overlay on top
 render();
-
-// Firebase sync is now started inside the module script above automatically
+renderEmpLoginScreen();
 </script>
 </body>
 </html>
