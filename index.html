@@ -343,7 +343,97 @@ if (!CONFIG_FILLED) {
   .sync-badge.connecting { background:var(--blue-light);color:var(--blue); }
   .firebase-config-banner { background:#FFF8E1;border:1px solid #FFD54F;border-radius:var(--radius);padding:12px 16px;margin-bottom:1rem;font-size:13px;color:#5D4037; }
   .firebase-config-banner strong { color:#3E2723; }
-  @media (max-width: 600px) { .stats-grid { grid-template-columns: 1fr 1fr; } .form-grid { grid-template-columns: 1fr; } .container { padding: 1rem; } .topbar { padding: 0 1rem; } .step-line { width: 32px; } .filter-bar { gap: 6px; } .filter-result { width: 100%; margin-left: 0; } }
+  /* ── MOBILE CARDS (replaces table on small screens) ── */
+  .order-card { background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:10px;display:none; }
+  .order-card-top { display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:8px; }
+  .order-card-name { font-size:15px;font-weight:600;flex:1;line-height:1.3; }
+  .order-card-id { font-family:'DM Mono',monospace;font-size:11px;color:var(--text-hint);margin-top:2px; }
+  .order-card-mid { display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px; }
+  .order-card-date { font-size:12px;color:var(--text-secondary); }
+  .order-card-actions { display:flex;gap:6px;flex-wrap:wrap; }
+  .order-card-edits { display:flex;gap:4px;flex-wrap:wrap;margin-top:8px;padding-top:8px;border-top:1px solid var(--border); }
+
+  /* ── COMPREHENSIVE MOBILE STYLES ── */
+  @media (max-width: 640px) {
+    .topbar { padding: 0 12px; height: 52px; }
+    .brand-name { font-size: 14px; }
+    .brand-tag { display: none; }
+    .sync-badge { font-size: 10px; padding: 2px 7px; }
+    .admin-btn { height: 28px; padding: 0 8px; font-size: 11px; margin-left: 4px; }
+    .container { padding: 12px; }
+    .stats-grid { grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 1rem; }
+    .stat-card { padding: 10px 12px; }
+    .stat-value { font-size: 20px; }
+    .stat-label { font-size: 10px; }
+    .card-head { padding: 10px 12px; gap: 6px; }
+    .card-head-title { font-size: 14px; }
+    .tab-bar { width: 100%; }
+    .tab { font-size: 11px; padding: 0 5px; }
+    .btn { height: 34px; font-size: 12px; padding: 0 12px; }
+    .btn-sm { height: 28px; font-size: 11px; padding: 0 8px; }
+    .table-wrap { display: none; }
+    .mobile-cards-wrap { display: block !important; }
+    .order-card { display: block; }
+    .filter-bar { padding: 8px 12px; gap: 6px; }
+    .filter-label { font-size: 11px; }
+    .filter-date { height: 30px; font-size: 12px; padding: 0 8px; flex: 1; min-width: 0; }
+    .filter-result { width: 100%; margin-left: 0; font-size: 11px; }
+    .master-bar { padding: 8px 12px; }
+    .master-bar-text { font-size: 12px; width: 100%; flex: none; }
+    .form-section { padding: 14px; }
+    .form-grid { grid-template-columns: 1fr; gap: 10px; margin-bottom: 10px; }
+    .form-input { height: 44px; font-size: 15px; }
+    .form-label { font-size: 11px; }
+    .form-actions { flex-direction: column-reverse; gap: 8px; }
+    .form-actions .btn { width: 100%; justify-content: center; height: 44px; font-size: 14px; }
+    .stepper { margin-bottom: 1.25rem; }
+    .step-line { width: 28px; }
+    .step-num { width: 32px; height: 32px; font-size: 13px; }
+    .step-name { font-size: 10px; }
+    .modal-overlay { padding: 0; align-items: flex-end; }
+    .modal { border-radius: 18px 18px 0 0; max-width: 100%; max-height: 94vh; padding: 1.25rem; }
+    .modal-product { font-size: 16px; }
+    .admin-overlay { padding: 0; align-items: flex-end; }
+    .admin-modal { border-radius: 18px 18px 0 0; max-width: 100%; padding: 1.5rem 1.25rem 2rem; }
+    .emp-mgmt-overlay { padding: 0; align-items: flex-end; }
+    .emp-mgmt-modal { border-radius: 18px 18px 0 0; max-width: 100%; max-height: 90vh; }
+    .order-ref { font-size: 12px; padding: 6px 10px; }
+    .form-section-header { margin-bottom: 1rem; }
+    .cancel-box > div:last-of-type { flex-direction: column; gap: 8px; }
+    .cancel-box #f-cancelledDate { width: 100%; }
+    .emp-wrap .emp-dd { font-size: 14px; }
+  }
+  @media (max-width: 380px) {
+    .admin-btn .admin-badge { display: none; }
+    .brand-icon { width: 28px; height: 28px; }
+  }
+
+  /* Floating Action Button for mobile */
+  .fab-new-order {
+    display: none;
+    position: fixed;
+    bottom: 24px;
+    right: 20px;
+    z-index: 100;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: var(--blue);
+    color: #fff;
+    border: none;
+    font-size: 26px;
+    box-shadow: 0 4px 16px rgba(24,95,165,0.45);
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, transform 0.15s;
+  }
+  .fab-new-order:active { background: #0C447C; transform: scale(0.94); }
+  @media (max-width: 640px) {
+    .fab-new-order { display: flex; }
+    .card-head .btn-primary { display: none; }
+    .card-head > div:last-child { flex-direction: column-reverse; align-items: flex-start; }
+  }
 
   /* Employee dropdown */
   .emp-wrap { position:relative; }
@@ -419,6 +509,7 @@ if (!CONFIG_FILLED) {
   <div id="main-content"></div>
 </div>
 <div id="modal-root"></div>
+<button class="fab-new-order" onclick="goNew()" title="New Order">+</button>
 
 <script>
 const DB_KEY = 'pt_orders_v3';
@@ -794,16 +885,19 @@ function renderList() {
     return true;
   });
 
-  const rows = filtered.length === 0
-    ? '<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">📋</div>No orders yet. Click "+ New Order" to begin.</div></td></tr>'
-    : filtered.map(function(o) {
+  const emptyRow = '<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">📋</div>No orders yet. Click "+ New Order" to begin.</div></td></tr>';
+  const emptyCard = '<div class="empty-state"><div class="empty-icon">📋</div>No orders yet. Tap "+ New Order" to begin.</div>';
+
+  let rows = filtered.length === 0 ? emptyRow : '';
+  let mobileCards = filtered.length === 0 ? emptyCard : '';
+
+  filtered.forEach(function(o) {
         const s = getStatus(o);
         const nextBtn = !o.step2
           ? '<button class="btn btn-sm btn-primary" onclick="goStep2(\'' + o.id + '\')">+ Step 2</button>'
           : !o.step3
           ? '<button class="btn btn-sm btn-success" onclick="goStep3(\'' + o.id + '\')">+ Step 3</button>'
           : '<span style="font-size:12px;color:var(--green);font-weight:600;">&#10003; Complete</span>';
-        // Lock rules: S1 locked if step2 done | S2 locked if step3 done | S3 locked always after complete
         const s1Locked = !!(o.step2 || o.step3 || o.cancelled);
         const s2Locked = !!o.step3;
         const s3Locked = !!o.step3;
@@ -811,7 +905,9 @@ function renderList() {
         const editS1 = s1Locked ? lockIcon : '<button class="btn btn-sm btn-edit btn-ghost" onclick="goEditStep1(\'' + o.id + '\')" title="Edit Step 1">&#9998; S1</button>';
         const editS2 = o.step2 ? (s2Locked ? lockIcon : '<button class="btn btn-sm btn-edit btn-ghost" onclick="goEditStep2(\'' + o.id + '\')" title="Edit Step 2">&#9998; S2</button>') : '';
         const editS3 = o.step3 ? (s3Locked ? lockIcon : '<button class="btn btn-sm btn-edit btn-ghost" onclick="goEditStep3(\'' + o.id + '\')" title="Edit Step 3">&#9998; S3</button>') : '';
-        return '<tr>'
+        const delBtn = state.adminLoggedIn ? '<button class="btn btn-sm btn-danger btn-ghost" onclick="deleteOrder(\'' + o.id + '\')">&#128465; Delete</button>' : '';
+
+        rows += '<tr>'
           + '<td><span class="order-id">' + esc(o.id) + '</span></td>'
           + '<td><span class="product-name">' + esc(o.step1.productName) + '</span></td>'
           + '<td style="color:var(--text-secondary)">' + esc(o.step1.date) + '</td>'
@@ -819,9 +915,25 @@ function renderList() {
           + '<td>' + nextBtn + '</td>'
           + '<td><div class="action-group">' + editS1 + editS2 + editS3 + '</div></td>'
           + '<td><button class="btn btn-sm btn-ghost" onclick="viewOrder(\'' + o.id + '\')">View</button></td>'
-          + '<td>' + (state.adminLoggedIn ? '<button class="btn btn-sm btn-danger btn-ghost" onclick="deleteOrder(\'' + o.id + '\')">Delete</button>' : '<span style="font-size:11px;color:var(--text-hint);padding:0 8px;">🔒</span>') + '</td>'
+          + '<td>' + (state.adminLoggedIn ? '<button class="btn btn-sm btn-danger btn-ghost" onclick="deleteOrder(\'' + o.id + '\')">Delete</button>' : '<span style="font-size:11px;color:var(--text-hint);padding:0 8px;">&#128274;</span>') + '</td>'
           + '</tr>';
-      }).join('');
+
+        mobileCards += '<div class="order-card">'
+          + '<div class="order-card-top">'
+          + '<div><div class="order-card-name">' + esc(o.step1.productName) + '</div><div class="order-card-id">' + esc(o.id) + '</div></div>'
+          + '<span class="status-pill ' + s.cls + '"><span class="status-dot"></span>' + s.label + '</span>'
+          + '</div>'
+          + '<div class="order-card-mid">'
+          + '<span class="order-card-date">&#128197; ' + esc(o.step1.date) + '</span>'
+          + '</div>'
+          + '<div class="order-card-actions">'
+          + nextBtn
+          + ' <button class="btn btn-sm btn-ghost" onclick="viewOrder(\'' + o.id + '\')">&#128065; View</button>'
+          + ' ' + delBtn
+          + '</div>'
+          + (editS1||editS2||editS3 ? '<div class="order-card-edits">' + editS1 + editS2 + editS3 + '</div>' : '')
+          + '</div>';
+  });
 
   const productCount = state.products.length;
   const masterBar = '<div class="master-bar">'
@@ -860,7 +972,9 @@ function renderList() {
     + masterBar
     + '<div class="table-wrap"><table>'
     + '<thead><tr><th>Order ID</th><th>Product</th><th>Raised On</th><th>Status</th><th>Next Action</th><th>Edit Step</th><th>View</th><th>Delete</th></tr></thead>'
-    + '<tbody>' + rows + '</tbody></table></div></div>';
+    + '<tbody>' + rows + '</tbody></table></div>'
+    + '<div class="mobile-cards-wrap" style="padding:10px 10px 4px;display:none;">' + mobileCards + '</div>'
+    + '</div>';
 }
 
 // ── STEPPER HELPER ──
