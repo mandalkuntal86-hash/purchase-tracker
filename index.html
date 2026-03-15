@@ -1485,7 +1485,7 @@ function pendingRequestsPanel(currentOrderId) {
     + '<div style="font-size:11px;color:var(--blue);opacity:0.75;margin-top:1px;">' + pending.length + ' pending request' + (pending.length > 1 ? 's' : '') + ' — click to include in this order</div>'
     + '</div>'
     + '</div>'
-    + '<div style="max-height:220px;overflow-y:auto;">' + rows + '</div>'
+    + '<div>' + rows + '</div>'
     + '</div>';
 }
 
@@ -1574,13 +1574,28 @@ function _updateS2Total() {
   if (el) el.textContent = total > 0 ? '₹' + total.toFixed(2) : '—';
 }
 
+function _syncS2ItemsFromDOM() {
+  // Read current DOM values back into _s2Items before any re-render
+  _s2Items.forEach(function(it, idx) {
+    var prodEl  = document.getElementById('s2p-'    + idx);
+    var qtyEl   = document.getElementById('s2qty-'  + idx);
+    var rateEl  = document.getElementById('s2rate-' + idx);
+    var notesEl = document.querySelector('#s2row-'  + idx + ' input[placeholder="Optional..."]');
+    if (prodEl)  it.product = prodEl.value;
+    if (qtyEl)   it.qty     = qtyEl.value;
+    if (rateEl)  it.rate    = rateEl.value;
+    if (notesEl) it.notes2  = notesEl.value;
+  });
+}
+
 function _renderS2Items() {
+  _syncS2ItemsFromDOM();   // preserve any typed values before rebuilding
   var wrap = document.getElementById('s2-items-wrap');
   if (!wrap) return;
   var dis = wrap.dataset.disabled === 'true';
   var hasProducts = state.products.length > 0;
 
-  var html = '<table style="width:100%;border-collapse:collapse;">'
+  var html = '<table style="width:100%;border-collapse:collapse;table-layout:auto;">'
     + '<thead><tr style="background:var(--surface2);">'
     + '<th style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em;padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);width:35%;">Product / Item *</th>'
     + '<th style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em;padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);width:12%;">Qty *</th>'
@@ -1719,7 +1734,7 @@ function step2Fields(orderedBy, orderDate, items, vendor, notes2Header, isEdit, 
     + '<label class="form-label" style="margin-bottom:0;">Order Items *</label>'
     + (!dis ? '<button class="btn btn-sm btn-primary" onclick="s2AddItem()" type="button">+ Add Item</button>' : '')
     + '</div>'
-    + '<div id="s2-items-wrap" data-disabled="' + (dis?'true':'false') + '" style="border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;"></div>'
+    + '<div id="s2-items-wrap" data-disabled="' + (dis?'true':'false') + '" style="border:1px solid var(--border);border-radius:var(--radius);width:100%;"></div>'
     + '<div style="display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-top:8px;padding:6px 10px;background:var(--surface2);border-radius:var(--radius);border:1px solid var(--border);">'
     + '<span style="font-size:12px;color:var(--text-secondary);font-weight:500;text-transform:uppercase;letter-spacing:.04em;">Grand Total</span>'
     + '<span id="s2-grand-total" style="font-size:16px;font-weight:700;color:var(--blue);font-family:\'DM Mono\',monospace;">—</span>'
