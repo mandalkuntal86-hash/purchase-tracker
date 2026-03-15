@@ -308,7 +308,35 @@ if (!CONFIG_FILLED) {
   .firebase-config-banner strong { color:#3E2723; }
   @media (max-width: 600px) { .stats-grid { grid-template-columns: 1fr 1fr; } .form-grid { grid-template-columns: 1fr; } .container { padding: 1rem; } .topbar { padding: 0 1rem; } .step-line { width: 32px; } .filter-bar { gap: 6px; } .filter-result { width: 100%; margin-left: 0; } }
 
-  /* Admin Panel */
+  /* Employee dropdown */
+  .emp-wrap { position:relative; }
+  .emp-dd { position:absolute; top:calc(100% + 4px); left:0; right:0; background:var(--surface); border:1px solid var(--border-strong); border-radius:var(--radius); z-index:300; max-height:200px; overflow-y:auto; box-shadow:0 4px 16px rgba(0,0,0,0.10); display:none; }
+  .emp-dd-item { padding:8px 12px; font-size:13px; cursor:pointer; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:8px; }
+  .emp-dd-item:last-child { border-bottom:none; }
+  .emp-dd-item:hover { background:var(--blue-light); color:var(--blue); }
+  .emp-dd-empty { padding:10px 12px; font-size:13px; color:var(--text-hint); font-style:italic; }
+
+  /* Employee Management Panel */
+  .emp-mgmt-overlay { position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:1001;padding:1rem; }
+  .emp-mgmt-modal { background:#fff;border-radius:16px;width:100%;max-width:520px;border:1px solid rgba(0,0,0,0.10);box-shadow:0 8px 40px rgba(0,0,0,0.20);display:flex;flex-direction:column;max-height:90vh; }
+  .emp-mgmt-head { padding:1.25rem 1.5rem;border-bottom:1px solid rgba(0,0,0,0.10);display:flex;align-items:center;justify-content:space-between; }
+  .emp-mgmt-title { font-size:17px;font-weight:700;color:#1A1917;display:flex;align-items:center;gap:8px; }
+  .emp-mgmt-close { background:none;border:none;font-size:22px;cursor:pointer;color:#9E9D99;line-height:1;padding:2px; }
+  .emp-mgmt-close:hover { color:#1A1917; }
+  .emp-mgmt-body { padding:1.25rem 1.5rem;overflow-y:auto;flex:1; }
+  .emp-list { border:1px solid rgba(0,0,0,0.10);border-radius:10px;overflow:hidden;margin-bottom:1rem; }
+  .emp-row { display:flex;align-items:center;padding:10px 14px;border-bottom:1px solid rgba(0,0,0,0.07);font-size:14px; }
+  .emp-row:last-child { border-bottom:none; }
+  .emp-row-num { font-size:11px;color:#9E9D99;min-width:24px; }
+  .emp-row-name { flex:1;font-weight:500; }
+  .emp-row-del { background:none;border:none;cursor:pointer;color:#A32D2D;font-size:16px;padding:2px 6px;border-radius:6px;line-height:1; }
+  .emp-row-del:hover { background:#FCEBEB; }
+  .emp-add-row { display:flex;gap:8px;margin-top:4px; }
+  .emp-add-input { flex:1;height:38px;padding:0 12px;border:1.5px solid rgba(0,0,0,0.18);border-radius:10px;font-size:14px;font-family:'DM Sans',sans-serif;outline:none;background:#F5F4F0; }
+  .emp-add-input:focus { border-color:#185FA5;background:#fff;box-shadow:0 0 0 3px rgba(24,95,165,0.12); }
+  .emp-add-btn { height:38px;padding:0 16px;border-radius:10px;border:none;background:#185FA5;color:#fff;font-size:13px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;white-space:nowrap; }
+  .emp-add-btn:hover { background:#0C447C; }
+  .emp-empty { text-align:center;padding:2rem 1rem;color:#9E9D99;font-size:13px; }
   .admin-btn { height:32px; padding:0 12px; border-radius:8px; border:1px solid var(--border-strong); background:transparent; font-size:12px; font-weight:500; cursor:pointer; font-family:'DM Sans',sans-serif; display:inline-flex; align-items:center; gap:5px; transition:all 0.15s; color:var(--text-secondary); margin-left:10px; }
   .admin-btn:hover { background:var(--surface2); }
   .admin-btn.logged-in { background:#185FA5; color:#fff; border-color:#185FA5; }
@@ -358,6 +386,7 @@ if (!CONFIG_FILLED) {
 <script>
 const DB_KEY = 'pt_orders_v3';
 const PM_KEY = 'pt_products_v1';
+const EMP_KEY = 'pt_employees_v1';
 
 let state = {
   view: 'list',        // list | new | step1edit | step2 | step2edit | step3 | step3edit
@@ -366,6 +395,7 @@ let state = {
   dateTo: '',
   orders: JSON.parse(localStorage.getItem(DB_KEY) || '[]'),
   products: JSON.parse(localStorage.getItem(PM_KEY) || '[]'),
+  employees: JSON.parse(localStorage.getItem(EMP_KEY) || '[]'),
   modal: null,
   editId: null,
   highlightIdx: -1,
@@ -427,6 +457,7 @@ function openAdminPanel() {
     overlay.innerHTML = '<div class="admin-modal">'
       + '<div class="admin-modal-title">&#128513; Admin Session</div>'
       + '<div class="admin-modal-sub">You are currently logged in as Admin. Admin controls (Delete, Upload, Clear) are visible.</div>'
+      + '<button class="admin-login-btn" style="background:#185FA5;margin-bottom:8px;" onclick="closeAdminOverlay();openEmpMgmt()">&#128100; Manage Employees</button>'
       + '<button class="admin-login-btn" style="background:#A32D2D;" onclick="adminLogout()">&#10006; Logout from Admin</button>'
       + '<button class="admin-cancel-btn" onclick="closeAdminOverlay()">Keep Session</button>'
       + '</div>';
@@ -502,6 +533,135 @@ function closeAdminOverlay() {
   var root = document.getElementById('admin-panel-root');
   if (root) root.innerHTML = '';
 }
+
+// ── EMPLOYEE MANAGEMENT ──
+function openEmpMgmt() {
+  renderEmpMgmt();
+}
+
+function renderEmpMgmt() {
+  var root = document.getElementById('admin-panel-root');
+  root.innerHTML = '';
+  var overlay = document.createElement('div');
+  overlay.className = 'emp-mgmt-overlay';
+  overlay.id = 'emp-mgmt-overlay';
+
+  var listHtml = '';
+  if (state.employees.length === 0) {
+    listHtml = '<div class="emp-list"><div class="emp-empty">&#128100; No employees added yet.<br>Add employee names below.</div></div>';
+  } else {
+    var rows = state.employees.map(function(name, i) {
+      return '<div class="emp-row">'
+        + '<span class="emp-row-num">' + (i+1) + '</span>'
+        + '<span class="emp-row-name">&#128100; ' + esc(name) + '</span>'
+        + '<button class="emp-row-del" onclick="deleteEmployee(' + i + ')" title="Remove">&#10006;</button>'
+        + '</div>';
+    }).join('');
+    listHtml = '<div class="emp-list">' + rows + '</div>';
+  }
+
+  overlay.innerHTML = '<div class="emp-mgmt-modal">'
+    + '<div class="emp-mgmt-head">'
+    + '<div class="emp-mgmt-title">&#128100; Employee Management</div>'
+    + '<button class="emp-mgmt-close" onclick="closeEmpMgmt()">&times;</button>'
+    + '</div>'
+    + '<div class="emp-mgmt-body">'
+    + '<div style="font-size:13px;color:#6B6A66;margin-bottom:1rem;">Employee names appear as dropdown options in Ordered By, Cancelled By, Received By, and Checked By fields.</div>'
+    + listHtml
+    + '<div style="font-size:12px;font-weight:600;color:#6B6A66;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;">Add New Employee</div>'
+    + '<div class="emp-add-row">'
+    + '<input class="emp-add-input" type="text" id="emp-add-name" placeholder="Employee full name..." onkeydown="if(event.key===\'Enter\')addEmployee()">'
+    + '<button class="emp-add-btn" onclick="addEmployee()">+ Add</button>'
+    + '</div>'
+    + '<div id="emp-add-err" style="font-size:12px;color:#A32D2D;margin-top:6px;min-height:16px;"></div>'
+    + '</div>'
+    + '<div style="padding:1rem 1.5rem;border-top:1px solid rgba(0,0,0,0.08);display:flex;justify-content:flex-end;">'
+    + '<button class="admin-cancel-btn" style="width:auto;padding:0 20px;" onclick="closeEmpMgmt()">Done</button>'
+    + '</div>'
+    + '</div>';
+
+  root.appendChild(overlay);
+  setTimeout(function(){ var f=document.getElementById('emp-add-name'); if(f) f.focus(); }, 50);
+}
+
+function addEmployee() {
+  var inp = document.getElementById('emp-add-name');
+  var err = document.getElementById('emp-add-err');
+  if (!inp) return;
+  var name = inp.value.trim();
+  if (!name) { if(err) err.textContent = 'Please enter a name.'; return; }
+  if (state.employees.some(function(e){ return e.toLowerCase()===name.toLowerCase(); })) {
+    if(err) err.textContent = 'This employee already exists.'; return;
+  }
+  state.employees.push(name);
+  saveEmployees();
+  inp.value = '';
+  if(err) err.textContent = '';
+  renderEmpMgmt();
+  setTimeout(function(){ var f=document.getElementById('emp-add-name'); if(f) f.focus(); }, 50);
+}
+
+function deleteEmployee(idx) {
+  state.employees.splice(idx, 1);
+  saveEmployees();
+  renderEmpMgmt();
+}
+
+function closeEmpMgmt() {
+  var root = document.getElementById('admin-panel-root');
+  if (root) root.innerHTML = '';
+}
+
+// ── EMPLOYEE DROPDOWN FIELD HELPER ──
+function empDropdownField(fieldId, value, placeholder, disabled) {
+  var disAttr = disabled ? 'disabled style="opacity:0.5"' : '';
+  var hasEmps = state.employees.length > 0;
+  return '<div class="emp-wrap" id="empwrap-' + fieldId + '">'
+    + '<input class="form-input" type="text" id="' + fieldId + '" placeholder="' + esc(placeholder) + '" value="' + esc(value) + '" autocomplete="off"'
+    + (hasEmps ? ' onfocus="showEmpDd(\'' + fieldId + '\')" oninput="filterEmpDd(\'' + fieldId + '\')" onkeydown="empDdKeydown(event,\'' + fieldId + '\')"' : '')
+    + ' ' + disAttr + '>'
+    + (hasEmps && !disabled ? '<div class="emp-dd" id="empdd-' + fieldId + '"></div>' : '')
+    + '</div>';
+}
+
+function showEmpDd(fieldId) {
+  var input = document.getElementById(fieldId);
+  var dd = document.getElementById('empdd-' + fieldId);
+  if (!dd || !input) return;
+  var val = input.value.trim().toLowerCase();
+  var matches = val === '' ? state.employees : state.employees.filter(function(e){ return e.toLowerCase().includes(val); });
+  if (matches.length === 0) {
+    dd.innerHTML = '<div class="emp-dd-empty">No match — type manually</div>';
+  } else {
+    dd.innerHTML = matches.map(function(name){
+      return '<div class="emp-dd-item" onmousedown="selectEmp(\'' + fieldId + '\',\'' + esc(name).replace(/'/g,"\\'") + '\')">&#128100; ' + esc(name) + '</div>';
+    }).join('');
+  }
+  dd.style.display = 'block';
+}
+
+function filterEmpDd(fieldId) { showEmpDd(fieldId); }
+
+function selectEmp(fieldId, name) {
+  var input = document.getElementById(fieldId);
+  if (input) input.value = name;
+  var dd = document.getElementById('empdd-' + fieldId);
+  if (dd) dd.style.display = 'none';
+}
+
+function empDdKeydown(e, fieldId) {
+  var dd = document.getElementById('empdd-' + fieldId);
+  if (!dd || dd.style.display === 'none') return;
+  if (e.key === 'Escape') { dd.style.display = 'none'; }
+}
+
+// Close emp dropdowns on outside click
+document.addEventListener('click', function(e) {
+  document.querySelectorAll('.emp-dd').forEach(function(dd){
+    var wrap = dd.parentElement;
+    if (wrap && !wrap.contains(e.target)) dd.style.display = 'none';
+  });
+});
 function saveProducts() {
   localStorage.setItem(PM_KEY, JSON.stringify(state.products));
   // Push to Firebase — retry once if not ready yet
@@ -510,6 +670,16 @@ function saveProducts() {
   } else {
     setTimeout(function() {
       if (window._fbSaveProducts) window._fbSaveProducts(state.products);
+    }, 2000);
+  }
+}
+function saveEmployees() {
+  localStorage.setItem(EMP_KEY, JSON.stringify(state.employees));
+  if (window._fbSaveEmployees) {
+    window._fbSaveEmployees(state.employees);
+  } else {
+    setTimeout(function() {
+      if (window._fbSaveEmployees) window._fbSaveEmployees(state.employees);
     }, 2000);
   }
 }
@@ -700,7 +870,7 @@ function renderStep2() {
     + '<div class="form-section">'
     + '<div class="form-section-header"><span class="step-badge sb-2">Step 2</span><span class="form-section-title">Order Details</span></div>'
     + '<div class="order-ref">Order <strong>' + esc(o.id) + '</strong> &mdash; ' + esc(o.step1.productName) + '</div>'
-    + step2Fields('', '', '', '', '', false, o.cancelled||null) + '</div>';
+    + step2Fields('', '', '', '', '', '', false, o.cancelled||null) + '</div>';
 }
 
 // ── STEP 2 EDIT ──
@@ -711,10 +881,10 @@ function renderStep2Edit() {
     + '<div class="form-section">'
     + '<div class="form-section-header"><span class="step-badge sb-2">Step 2</span><span class="form-section-title">Edit Order Details</span><span class="edit-badge">&#9998; Editing</span></div>'
     + '<div class="order-ref">Editing order <strong>' + esc(o.id) + '</strong> &mdash; ' + esc(o.step1.productName) + '</div>'
-    + step2Fields(s2.orderedBy||'', s2.orderDate||'', s2.qty||'', s2.vendor||'', s2.notes2||'', true, o.cancelled||null) + '</div>';
+    + step2Fields(s2.orderedBy||'', s2.orderDate||'', s2.qty||'', s2.vendor||'', s2.rate||'', s2.notes2||'', true, o.cancelled||null) + '</div>';
 }
 
-function step2Fields(orderedBy, orderDate, qty, vendor, notes2, isEdit, cancelledInfo) {
+function step2Fields(orderedBy, orderDate, qty, vendor, rate, notes2, isEdit, cancelledInfo) {
   // If currently cancelled, show banner at top
   const cancelledBanner = cancelledInfo
     ? '<div class="cancelled-banner"><div class="cancelled-banner-icon">&#10006;</div><div class="cancelled-banner-text"><div class="cancelled-banner-title">This order was cancelled</div><div class="cancelled-banner-reason">Reason: ' + esc(cancelledInfo.reason) + (cancelledInfo.cancelledBy ? ' &mdash; By: ' + esc(cancelledInfo.cancelledBy) : '') + (cancelledInfo.cancelledDate ? ' on ' + esc(cancelledInfo.cancelledDate) : '') + '</div></div></div>'
@@ -723,6 +893,8 @@ function step2Fields(orderedBy, orderDate, qty, vendor, notes2, isEdit, cancelle
   const saveBtn = isEdit
     ? '<button class="btn btn-amber" onclick="saveStep2(true)">&#10003; Update Step 2</button>'
     : '<button class="btn btn-primary" onclick="saveStep2(false)">Save Order Details &#8594;</button>';
+
+  const dis = cancelledInfo ? true : false;
 
   // Cancel order box - only show if not already cancelled
   const cancelBox = !cancelledInfo ? '<div class="cancel-box">'
@@ -736,7 +908,7 @@ function step2Fields(orderedBy, orderDate, qty, vendor, notes2, isEdit, cancelle
     + '<input class="form-input" type="text" id="f-cancel-other" placeholder="Specify reason..." style="width:100%;">'
     + '</div>'
     + '<div style="display:flex;gap:8px;align-items:center;margin-top:12px;">'
-    + '<input class="form-input" type="text" id="f-cancelledBy" placeholder="Cancelled by (name) *" style="flex:1;">'
+    + empDropdownField('f-cancelledBy', '', 'Cancelled by (name) *', false)
     + '<input class="form-input" type="date" id="f-cancelledDate" value="' + today() + '" style="width:160px;">'
     + '<button class="btn btn-danger" onclick="cancelOrder()" style="white-space:nowrap;">&#10006; Cancel Order</button>'
     + '</div></div>'
@@ -744,13 +916,14 @@ function step2Fields(orderedBy, orderDate, qty, vendor, notes2, isEdit, cancelle
 
   return cancelledBanner
     + '<div class="form-grid">'
-    + '<div class="form-group"><label class="form-label">Ordered By (Name) *</label><input class="form-input" type="text" id="f-orderedBy" placeholder="Person placing the order" value="' + esc(orderedBy) + '" ' + (cancelledInfo?'disabled style="opacity:0.5"':'') + '></div>'
-    + '<div class="form-group"><label class="form-label">Order Date *</label><input class="form-input" type="date" id="f-orderDate" value="' + (orderDate||today()) + '" ' + (cancelledInfo?'disabled style="opacity:0.5"':'') + '></div>'
+    + '<div class="form-group"><label class="form-label">Ordered By (Name) *</label>' + empDropdownField('f-orderedBy', orderedBy, 'Person placing the order', dis) + '</div>'
+    + '<div class="form-group"><label class="form-label">Order Date *</label><input class="form-input" type="date" id="f-orderDate" value="' + (orderDate||today()) + '" ' + (dis?'disabled style="opacity:0.5"':'') + '></div>'
     + '</div><div class="form-grid">'
-    + '<div class="form-group"><label class="form-label">Quantity *</label><input class="form-input" type="number" id="f-qty" placeholder="e.g. 10" min="1" value="' + esc(qty) + '" ' + (cancelledInfo?'disabled style="opacity:0.5"':'') + '></div>'
-    + '<div class="form-group"><label class="form-label">Ordered From (Vendor) *</label><input class="form-input" type="text" id="f-vendor" placeholder="Supplier / Company name" value="' + esc(vendor) + '" ' + (cancelledInfo?'disabled style="opacity:0.5"':'') + '></div>'
-    + '</div><div class="form-grid single">'
-    + '<div class="form-group"><label class="form-label">Notes / Reference (optional)</label><input class="form-input" type="text" id="f-notes2" placeholder="PO reference, special instructions..." value="' + esc(notes2) + '" ' + (cancelledInfo?'disabled style="opacity:0.5"':'') + '></div>'
+    + '<div class="form-group"><label class="form-label">Quantity *</label><input class="form-input" type="number" id="f-qty" placeholder="e.g. 10" min="1" value="' + esc(qty) + '" ' + (dis?'disabled style="opacity:0.5"':'') + '></div>'
+    + '<div class="form-group"><label class="form-label">Ordered From (Vendor) *</label><input class="form-input" type="text" id="f-vendor" placeholder="Supplier / Company name" value="' + esc(vendor) + '" ' + (dis?'disabled style="opacity:0.5"':'') + '></div>'
+    + '</div><div class="form-grid">'
+    + '<div class="form-group"><label class="form-label">Product Rate / Unit Price *</label><input class="form-input" type="number" id="f-rate" placeholder="e.g. 250.00" min="0" step="0.01" value="' + esc(rate) + '" ' + (dis?'disabled style="opacity:0.5"':'') + '></div>'
+    + '<div class="form-group"><label class="form-label">Notes / Reference (optional)</label><input class="form-input" type="text" id="f-notes2" placeholder="PO reference, special instructions..." value="' + esc(notes2) + '" ' + (dis?'disabled style="opacity:0.5"':'') + '></div>'
     + '</div>'
     + cancelBox
     + '<div class="form-actions"><button class="btn btn-ghost" onclick="goList()">Back to List</button>' + (!cancelledInfo ? saveBtn : '') + '</div>';
@@ -782,13 +955,13 @@ function step3Fields(receivedBy, receivedDate, checkedBy, checkDate, invoiceNo, 
     ? '<button class="btn btn-amber" onclick="saveStep3(true)">&#10003; Update Step 3</button>'
     : '<button class="btn btn-success" onclick="saveStep3(false)">&#10003; Mark as Received</button>';
   return '<div class="form-grid">'
-    + '<div class="form-group"><label class="form-label">Received By (Name) *</label><input class="form-input" type="text" id="f-receivedBy" placeholder="Who collected the goods" value="' + esc(receivedBy) + '"></div>'
+    + '<div class="form-group"><label class="form-label">Received By (Name) *</label>' + empDropdownField('f-receivedBy', receivedBy, 'Who collected the goods', false) + '</div>'
     + '<div class="form-group"><label class="form-label">Received Date *</label><input class="form-input" type="date" id="f-receivedDate" value="' + (receivedDate||today()) + '"></div>'
     + '</div><div class="form-grid">'
-    + '<div class="form-group"><label class="form-label">Checked / Verified By (Name) *</label><input class="form-input" type="text" id="f-checkedBy" placeholder="Who inspected the goods" value="' + esc(checkedBy) + '"></div>'
+    + '<div class="form-group"><label class="form-label">Checked / Verified By (Name) *</label>' + empDropdownField('f-checkedBy', checkedBy, 'Who inspected the goods', false) + '</div>'
     + '<div class="form-group"><label class="form-label">Check Date *</label><input class="form-input" type="date" id="f-checkDate" value="' + (checkDate||today()) + '"></div>'
     + '</div><div class="form-grid">'
-    + '<div class="form-group"><label class="form-label">Bill / Invoice Number *</label><input class="form-input" type="text" id="f-invoiceNo" placeholder="e.g. INV-2024-00123" value="' + esc(invoiceNo) + '"></div>'
+    + '<div class="form-group"><label class="form-label">Bill / Invoice Number <span style="font-size:11px;color:var(--text-hint);font-weight:400;text-transform:none;">(optional)</span></label><input class="form-input" type="text" id="f-invoiceNo" placeholder="e.g. INV-2024-00123" value="' + esc(invoiceNo) + '"></div>'
     + '<div class="form-group"><label class="form-label">Remarks (optional)</label><input class="form-input" type="text" id="f-remarks" placeholder="Condition, shortages, damages..." value="' + esc(remarks) + '"></div>'
     + '</div><div class="form-actions"><button class="btn btn-ghost" onclick="goList()">Cancel</button>' + btn + '</div>';
 }
@@ -938,7 +1111,7 @@ function renderViewModal(id) {
   const s1Rows = detailRows([['Product', o.step1.productName], ['Request Date', o.step1.date]]);
   const s2Rows = o.cancelled
     ? detailRows([['Status', 'CANCELLED'], ['Reason', o.cancelled.reason], ['Cancelled By', o.cancelled.cancelledBy||'-'], ['Cancelled Date', o.cancelled.cancelledDate||'-']])
-    : o.step2 ? detailRows([['Ordered By', o.step2.orderedBy],['Order Date', o.step2.orderDate],['Quantity', o.step2.qty],['Ordered From', o.step2.vendor], o.step2.notes2?['Notes', o.step2.notes2]:null]) : null;
+    : o.step2 ? detailRows([['Ordered By', o.step2.orderedBy],['Order Date', o.step2.orderDate],['Quantity', o.step2.qty],['Rate / Unit Price', o.step2.rate ? '₹' + o.step2.rate : '-'],['Ordered From', o.step2.vendor], o.step2.notes2?['Notes', o.step2.notes2]:null]) : null;
   const s3Rows = o.step3 ? detailRows([['Received By', o.step3.receivedBy],['Received Date', o.step3.receivedDate],['Checked By', o.step3.checkedBy],['Check Date', o.step3.checkDate],['Bill / Invoice No.', o.step3.invoiceNo||'-'], o.step3.remarks?['Remarks', o.step3.remarks]:null]) : null;
 
   function section(badgeCls, stepLabel, rows, editFn, isLocked) {
@@ -1060,10 +1233,12 @@ function saveStep2(isEdit) {
   const orderDate = document.getElementById('f-orderDate').value;
   const qty = document.getElementById('f-qty').value;
   const vendor = document.getElementById('f-vendor').value.trim();
+  const rate = document.getElementById('f-rate') ? document.getElementById('f-rate').value.trim() : '';
   const notes2 = document.getElementById('f-notes2').value.trim();
   if (!orderedBy||!orderDate||!qty||!vendor) { showMsgBox('Required','Please fill in all required fields.','error'); return; }
+  if (!rate) { showMsgBox('Required','Please enter the Product Rate / Unit Price.','error'); return; }
   const o = state.orders.find(x => x.id === state.editId);
-  o.step2 = { orderedBy, orderDate, qty, vendor, notes2 };
+  o.step2 = { orderedBy, orderDate, qty, vendor, rate, notes2 };
   save(o); state.view='list'; render();
   if (isEdit) showMsgBox('Updated', 'Step 2 has been updated successfully.', 'success');
 }
@@ -1077,7 +1252,6 @@ function saveStep3(isEdit) {
   const invoiceNo = document.getElementById('f-invoiceNo').value.trim();
   const remarks = document.getElementById('f-remarks').value.trim();
   if (!receivedBy||!receivedDate||!checkedBy||!checkDate) { showMsgBox('Required','Please fill in all required fields.','error'); return; }
-  if (!invoiceNo) { showMsgBox('Required','Please enter the Bill / Invoice Number.','error'); return; }
   const o = state.orders.find(x => x.id === state.editId);
   o.step3 = { receivedBy, receivedDate, checkedBy, checkDate, invoiceNo, remarks };
   save(o); state.view='list'; render();
