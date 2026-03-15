@@ -42,11 +42,8 @@ if (!CONFIG_FILLED) {
     const db  = getFirestore(app);
 
     window._firestoreReady = true;
-    // Refresh login screen now that Firebase is ready (it may be showing "Connecting…")
-    var loginRoot = document.getElementById('emp-login-screen-root');
-    if (loginRoot && loginRoot.innerHTML !== '') {
-      window._render && window._render();
-    }
+    // Refresh UI now that Firebase is connected
+    if (window._render) window._render();
 
     // ── Save order ──
     window._fbSaveOrder = async function(order) {
@@ -157,6 +154,10 @@ if (!CONFIG_FILLED) {
           const employees = snap.data().list || [];
           window._state.employees = employees;
           localStorage.setItem('pt_employees_v1', JSON.stringify(employees));
+          // Directly refresh login screen so employees appear immediately
+          if (!window._state.loggedInEmployee && window.renderEmpLoginScreen) {
+            window.renderEmpLoginScreen();
+          }
           window._render();
         }
       }).catch(function(e){ console.warn('getDoc employees error:', e); });
@@ -166,13 +167,13 @@ if (!CONFIG_FILLED) {
         function(snapshot) {
           if (snapshot.exists()) {
             const employees = snapshot.data().list || [];
-            const current = JSON.stringify(window._state.employees);
-            const incoming = JSON.stringify(employees);
-            if (current !== incoming) {
-              window._state.employees = employees;
-              localStorage.setItem('pt_employees_v1', JSON.stringify(employees));
-              window._render();
+            window._state.employees = employees;
+            localStorage.setItem('pt_employees_v1', JSON.stringify(employees));
+            // Always refresh login screen when employee list changes
+            if (!window._state.loggedInEmployee && window.renderEmpLoginScreen) {
+              window.renderEmpLoginScreen();
             }
+            window._render();
           } else {
             window._state.employees = [];
           }
@@ -625,8 +626,13 @@ function renderEmpLoginScreen() {
     + '<button class="emp-login-viewonly-btn" onclick="viewOnlyMode()">&#128065; View Only (no login)</button>'
     + '</div></div>';
 
-  window._empLoginSelectedIdx = -1;
-  _empLoginSelectedIdx = -1;
+  // Re-apply previously selected item if still valid (don't wipe selection on Firebase refresh)
+  if (_empLoginSelectedIdx >= 0 && _empLoginSelectedIdx < state.employees.length) {
+    var prevSel = document.getElementById('empli-' + _empLoginSelectedIdx);
+    if (prevSel) prevSel.classList.add('selected');
+    var btn = document.getElementById('emp-login-go-btn');
+    if (btn) btn.disabled = false;
+  }
 }
 
 var _empLoginSelectedIdx = -1;
@@ -659,9 +665,9 @@ function employeeLogout() {
   state.loggedInEmployee = null;
   state.view = 'list';
   _empLoginSelectedIdx = -1;
+  render();
   renderEmpLoginScreen();
   updateTopbarUserArea();
-  render();
 }
 
 function updateTopbarUserArea() {
@@ -1627,10 +1633,10 @@ function clearDateFilter() { state.dateFrom = ''; state.dateTo = ''; render(); }
 
 // ── EXPOSE TO FIREBASE MODULE ──
 window._state = state;
+window.renderEmpLoginScreen = renderEmpLoginScreen;
 window._render = function() {
-  // If the login screen overlay is currently showing, refresh it (employee list may have just loaded from Firebase)
-  var loginRoot = document.getElementById('emp-login-screen-root');
-  if (loginRoot && loginRoot.innerHTML !== '') {
+  // Always refresh login screen if user hasn't logged in yet
+  if (!state.loggedInEmployee) {
     renderEmpLoginScreen();
   }
   render();
