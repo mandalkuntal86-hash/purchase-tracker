@@ -2116,8 +2116,8 @@ function clearDateFilter() { state.dateFrom = ''; state.dateTo = ''; render(); }
 window._state = state;
 window.renderEmpLoginScreen = renderEmpLoginScreen;
 window._render = function() {
-  // Always refresh login screen if user hasn't logged in yet
-  if (!state.loggedInEmployee) {
+  // Only show login screen if neither employee nor admin is logged in
+  if (!state.loggedInEmployee && !state.adminLoggedIn) {
     renderEmpLoginScreen();
   }
   render();
