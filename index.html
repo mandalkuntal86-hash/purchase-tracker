@@ -1296,7 +1296,7 @@ function renderList() {
   const emptyRow = '<tr><td colspan="9"><div class="empty-state"><div class="empty-icon">📋</div>No orders yet.' + (state.loggedInEmployee ? ' Click "+ New Order" to begin.' : '') + '</div></td></tr>';
   const emptyCard = '<div class="empty-state"><div class="empty-icon">📋</div>No orders yet.' + (state.loggedInEmployee ? ' Tap "+ New Order" to begin.' : '') + '</div>';
 
-  const isViewOnly = !state.loggedInEmployee;
+  const isViewOnly = !state.loggedInEmployee && !state.adminLoggedIn;
 
   let rows = filtered.length === 0 ? emptyRow : '';
   let mobileCards = filtered.length === 0 ? emptyCard : '';
@@ -2141,12 +2141,12 @@ function render() {
   document.getElementById('modal-root').innerHTML = state.modal ? renderViewModal(state.modal) : '';
   // Hide FAB in view-only mode
   var fab = document.querySelector('.fab-new-order');
-  if (fab) fab.style.display = state.loggedInEmployee ? 'flex' : 'none';
+  if (fab) fab.style.display = (state.loggedInEmployee || state.adminLoggedIn) ? 'flex' : 'none';
 }
 
 // ── NAVIGATION ──
 function goNew()            {
-  if (!state.loggedInEmployee) { showMsgBox('Login Required', 'Please login with your employee name to create new orders.', 'error'); return; }
+  if (!state.loggedInEmployee && !state.adminLoggedIn) { showMsgBox('Login Required', 'Please login with your employee name to create new orders.', 'error'); return; }
   state.view='new'; state.editId=null; render();
 }
 function goList()           { state.view='list'; render(); }
@@ -2154,12 +2154,12 @@ function setTab(t)          { state.tab=t; state.dateFrom=''; state.dateTo=''; r
 function viewOrder(id)      { state.modal=id; render(); }
 function closeModal()       { state.modal=null; render(); }
 function goStep2(id) {
-  if (!state.loggedInEmployee) { showMsgBox('Login Required', 'Please login with your employee name to fill order details.', 'error'); return; }
+  if (!state.loggedInEmployee && !state.adminLoggedIn) { showMsgBox('Login Required', 'Please login with your employee name to fill order details.', 'error'); return; }
   _addedPendingReqs = {};
   state.editId=id; state.view='step2'; render();
 }
 function goStep3(id) {
-  if (!state.loggedInEmployee) { showMsgBox('Login Required', 'Please login with your employee name to mark goods as received.', 'error'); return; }
+  if (!state.loggedInEmployee && !state.adminLoggedIn) { showMsgBox('Login Required', 'Please login with your employee name to mark goods as received.', 'error'); return; }
   state.editId=id; state.view='step3'; render();
 }
 function goEditStep1(id) {
