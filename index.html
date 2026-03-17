@@ -1274,17 +1274,21 @@ function renderList() {
   }).join('');
 
   const filtered = state.orders.filter(function(o) {
-    // Hide orders that were merged/bundled into another order — shown inside parent
     if (o.step2 && o.step2.mergedInto) return false;
     if (state.tab !== 'all' && getStatus(o).label.toLowerCase() !== state.tab) return false;
-    if (state.dateFrom && o.step1.date < state.dateFrom) return false;
-    if (state.dateTo && o.step1.date > state.dateTo) return false;
-    // Received date filter — only applies to orders with step3
-    if (state.recvDateFrom || state.recvDateTo) {
-      if (!o.step3 || !o.step3.receivedDate) return false;
-      var rd = String(o.step3.receivedDate);
-      if (state.recvDateFrom && rd < state.recvDateFrom) return false;
-      if (state.recvDateTo && rd > state.recvDateTo) return false;
+    var df = state.dateFrom || '';
+    var dt = state.dateTo   || '';
+    if (df || dt) {
+      var cmpDate = '';
+      if (state.tab === 'all' || state.tab === 'pending') {
+        cmpDate = String(o.step1.date || '');
+      } else if (state.tab === 'ordered') {
+        cmpDate = o.step2 ? String(o.step2.orderDate || '') : '';
+      } else if (state.tab === 'received') {
+        cmpDate = o.step3 ? String(o.step3.receivedDate || '') : '';
+      }
+      if (df && cmpDate < df) return false;
+      if (dt && cmpDate > dt) return false;
     }
     return true;
   });
@@ -1361,21 +1365,16 @@ function renderList() {
         : '<span style="font-size:11px;color:var(--text-hint);display:inline-flex;align-items:center;gap:4px;">&#128274; Admin login required to upload/clear</span>')
     + '</div>';
 
+  var filterLabelMap = { all: '&#128197; Raised On', pending: '&#128197; Raised On', ordered: '&#128197; Ordered On', received: '&#9989; Received On' };
+  var filterLabel = filterLabelMap[state.tab] || '&#128197; Date';
   const isFiltered = state.dateFrom || state.dateTo;
-  const isRecvFiltered = state.recvDateFrom || state.recvDateTo;
-  const filterBar = '<div class="filter-bar" style="flex-wrap:wrap;gap:6px 12px;">'
-    + '<span class="filter-label">&#128197; Raised On</span>'
-    + '<input type="date" class="filter-date" id="flt-from" value="' + (state.dateFrom||'') + '" oninput="setDateFrom(this.value)" onchange="setDateFrom(this.value)" title="From date">'
+  const filterBar = '<div class="filter-bar">'
+    + '<span class="filter-label">' + filterLabel + '</span>'
+    + '<input type="date" class="filter-date" id="flt-from" value="' + (state.dateFrom||'') + '" oninput="setDateFrom(this.value)" onchange="setDateFrom(this.value)">'
     + '<span class="filter-sep">&#8594;</span>'
-    + '<input type="date" class="filter-date" id="flt-to" value="' + (state.dateTo||'') + '" oninput="setDateTo(this.value)" onchange="setDateTo(this.value)" title="To date">'
-    + (isFiltered ? '<button class="btn btn-sm btn-ghost" onclick="clearDateFilter()" style="color:var(--red);border-color:rgba(163,45,45,0.25);" title="Clear">&#10005; Clear</button>' : '')
-    + '<span style="width:100%;height:0;border-top:1px dashed var(--border);margin:2px 0;display:block;"></span>'
-    + '<span class="filter-label" style="color:var(--green);">&#9989; Received On</span>'
-    + '<input type="date" class="filter-date" id="flt-recv-from" value="' + (state.recvDateFrom||'') + '" oninput="setRecvDateFrom(this.value)" onchange="setRecvDateFrom(this.value)" title="Received from date">'
-    + '<span class="filter-sep">&#8594;</span>'
-    + '<input type="date" class="filter-date" id="flt-recv-to" value="' + (state.recvDateTo||'') + '" oninput="setRecvDateTo(this.value)" onchange="setRecvDateTo(this.value)" title="Received to date">'
-    + (isRecvFiltered ? '<button class="btn btn-sm btn-ghost" onclick="clearRecvDateFilter()" style="color:var(--red);border-color:rgba(163,45,45,0.25);" title="Clear received date filter">&#10005; Clear</button>' : '')
-    + '<span class="filter-result" style="margin-left:auto;">Showing <strong>' + filtered.length + '</strong> of <strong>' + state.orders.length + '</strong> orders</span>'
+    + '<input type="date" class="filter-date" id="flt-to" value="' + (state.dateTo||'') + '" oninput="setDateTo(this.value)" onchange="setDateTo(this.value)">'
+    + (isFiltered ? '<button class="btn btn-sm btn-ghost" onclick="clearDateFilter()" style="color:var(--red);border-color:rgba(163,45,45,0.25);">&#10005; Clear</button>' : '')
+    + '<span class="filter-result">Showing <strong>' + filtered.length + '</strong> of <strong>' + state.orders.length + '</strong> orders</span>'
     + '</div>';
 
   const fbConfigMissing = !window._firestoreReady;
@@ -2110,9 +2109,7 @@ function showMsgBox(title, msg, type) {
 function setDateFrom(val) { state.dateFrom = val || ''; render(); }
 function setDateTo(val) { state.dateTo = val || ''; render(); }
 function clearDateFilter() { state.dateFrom = ''; state.dateTo = ''; render(); }
-function setRecvDateFrom(val) { state.recvDateFrom = val || ''; render(); }
-function setRecvDateTo(val) { state.recvDateTo = val || ''; render(); }
-function clearRecvDateFilter() { state.recvDateFrom = ''; state.recvDateTo = ''; render(); }
+
 
 // ── EXPOSE TO FIREBASE MODULE ──
 window._state = state;
@@ -2152,7 +2149,7 @@ function goNew()            {
   state.view='new'; state.editId=null; render();
 }
 function goList()           { state.view='list'; render(); }
-function setTab(t)          { state.tab=t; render(); }
+function setTab(t)          { state.tab=t; state.dateFrom=''; state.dateTo=''; render(); }
 function viewOrder(id)      { state.modal=id; render(); }
 function closeModal()       { state.modal=null; render(); }
 function goStep2(id) {
