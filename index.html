@@ -1293,7 +1293,7 @@ function renderList() {
     return true;
   });
 
-  const emptyRow = '<tr><td colspan="9"><div class="empty-state"><div class="empty-icon">📋</div>No orders yet.' + (state.loggedInEmployee ? ' Click "+ New Order" to begin.' : '') + '</div></td></tr>';
+  const emptyRow = '<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">📋</div>No orders yet.' + (state.loggedInEmployee ? ' Click "+ New Order" to begin.' : '') + '</div></td></tr>';
   const emptyCard = '<div class="empty-state"><div class="empty-icon">📋</div>No orders yet.' + (state.loggedInEmployee ? ' Tap "+ New Order" to begin.' : '') + '</div>';
 
   const isViewOnly = !state.loggedInEmployee && !state.adminLoggedIn;
@@ -1324,16 +1324,26 @@ function renderList() {
         var bundledBadge = bundledCount > 0
           ? ' <span title="' + bundledCount + ' additional request(s) bundled" style="font-size:10px;font-weight:600;padding:2px 6px;border-radius:20px;background:var(--blue-light);color:var(--blue);white-space:nowrap;margin-left:4px;">+' + bundledCount + ' bundled</span>'
           : '';
+        // Smart date column per tab
+        var smartDate;
+        if (state.tab === 'ordered') {
+          smartDate = o.step2 && !o.step2.mergedInto ? '<span style="color:var(--blue);font-weight:600;font-size:13px;">&#128197; ' + esc(o.step2.orderDate) + '</span>' : '<span style="color:var(--text-hint);font-size:12px;">—</span>';
+        } else if (state.tab === 'received') {
+          smartDate = o.step3 ? '<span style="color:var(--green);font-weight:600;font-size:13px;">&#128197; ' + esc(o.step3.receivedDate) + '</span>' : '<span style="color:var(--text-hint);font-size:12px;">—</span>';
+        } else {
+          smartDate = '<span style="color:var(--text-secondary);font-size:13px;">&#128197; ' + esc(o.step1.date) + '</span>'
+            + (o.step2 && !o.step2.mergedInto ? '<br><span style="color:var(--blue);font-size:11px;">&#128230; ' + esc(o.step2.orderDate) + '</span>' : '')
+            + (o.step3 ? '<br><span style="color:var(--green);font-size:11px;">&#9989; ' + esc(o.step3.receivedDate) + '</span>' : '');
+        }
         rows += '<tr>'
           + '<td><span class="order-id">' + esc(o.id) + '</span></td>'
           + '<td><span class="product-name">' + esc(o.step1.productName) + '</span>' + bundledBadge + '</td>'
-          + '<td style="color:var(--text-secondary)">' + esc(o.step1.date) + '</td>'
+          + '<td>' + smartDate + '</td>'
           + '<td><span class="status-pill ' + s.cls + '"><span class="status-dot"></span>' + s.label + '</span></td>'
-          + '<td>' + (o.step3 ? '<span style="color:var(--green);font-weight:600;font-size:13px;">&#128197; ' + esc(o.step3.receivedDate) + '</span>' : '<span style="color:var(--text-hint);font-size:12px;">—</span>') + '</td>'
           + '<td>' + nextBtn + '</td>'
           + '<td><div class="action-group">' + editS1 + editS2 + editS3 + '</div></td>'
-          + '<td><button class="btn btn-sm btn-ghost" onclick="viewOrder(\'' + o.id + '\')">View</button></td>'
-          + '<td>' + (state.adminLoggedIn ? '<button class="btn btn-sm btn-danger btn-ghost" onclick="deleteOrder(\'' + o.id + '\')">Delete</button>' : '<span style="font-size:11px;color:var(--text-hint);padding:0 8px;">&#128274;</span>') + '</td>'
+          + '<td><button class="btn btn-sm btn-ghost" onclick="viewOrder(\'' + o.id + '\')" >View</button></td>'
+          + '<td>' + (state.adminLoggedIn ? '<button class="btn btn-sm btn-danger btn-ghost" onclick="deleteOrder(\'' + o.id + '\')" >Delete</button>' : '<span style="font-size:11px;color:var(--text-hint);padding:0 8px;">&#128274;</span>') + '</td>'
           + '</tr>';
 
         mobileCards += '<div class="order-card">'
@@ -1342,8 +1352,9 @@ function renderList() {
           + '<span class="status-pill ' + s.cls + '"><span class="status-dot"></span>' + s.label + '</span>'
           + '</div>'
           + '<div class="order-card-mid">'
-          + '<span class="order-card-date">&#128197; ' + esc(o.step1.date) + '</span>'
-          + (o.step3 ? '<span style="font-size:12px;color:var(--green);font-weight:600;margin-left:10px;">&#9989; Received: ' + esc(o.step3.receivedDate) + '</span>' : '')
+          + '<span class="order-card-date">&#128197; Raised: ' + esc(o.step1.date) + '</span>'
+          + (o.step2 && !o.step2.mergedInto ? '<span style="font-size:12px;color:var(--blue);font-weight:600;margin-left:8px;">&#128230; Ordered: ' + esc(o.step2.orderDate) + '</span>' : '')
+          + (o.step3 ? '<span style="font-size:12px;color:var(--green);font-weight:600;margin-left:8px;">&#9989; Received: ' + esc(o.step3.receivedDate) + '</span>' : '')
           + '</div>'
           + '<div class="order-card-actions">'
           + nextBtn
@@ -1400,7 +1411,7 @@ function renderList() {
     + filterBar
     + masterBar
     + '<div class="table-wrap"><table>'
-    + '<thead><tr><th>Order ID</th><th>Product</th><th>Raised On</th><th>Status</th><th>Received Date</th><th>Next Action</th><th>Edit Step</th><th>View</th><th>Delete</th></tr></thead>'
+    + '<thead><tr><th>Order ID</th><th>Product</th><th>' + (state.tab==='ordered' ? 'Ordered On' : state.tab==='received' ? 'Received On' : 'Date') + '</th><th>Status</th><th>Next Action</th><th>Edit Step</th><th>View</th><th>Delete</th></tr></thead>'
     + '<tbody>' + rows + '</tbody></table></div>'
     + '<div class="mobile-cards-wrap" style="padding:10px 10px 4px;display:none;">' + mobileCards + '</div>'
     + '</div>';
