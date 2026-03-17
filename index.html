@@ -661,6 +661,8 @@ let state = {
   tab: 'all',
   dateFrom: '',
   dateTo: '',
+  recvDateFrom: '',
+  recvDateTo: '',
   orders: JSON.parse(localStorage.getItem(DB_KEY) || '[]'),
   products: JSON.parse(localStorage.getItem(PM_KEY) || '[]'),
   employees: JSON.parse(localStorage.getItem(EMP_KEY) || '[]'),
@@ -1277,6 +1279,12 @@ function renderList() {
     if (state.tab !== 'all' && getStatus(o).label.toLowerCase() !== state.tab) return false;
     if (state.dateFrom && o.step1.date < state.dateFrom) return false;
     if (state.dateTo && o.step1.date > state.dateTo) return false;
+    // Received date filter — only applies to orders with step3
+    if (state.recvDateFrom || state.recvDateTo) {
+      if (!o.step3) return false;
+      if (state.recvDateFrom && o.step3.receivedDate < state.recvDateFrom) return false;
+      if (state.recvDateTo && o.step3.receivedDate > state.recvDateTo) return false;
+    }
     return true;
   });
 
@@ -1353,13 +1361,20 @@ function renderList() {
     + '</div>';
 
   const isFiltered = state.dateFrom || state.dateTo;
-  const filterBar = '<div class="filter-bar">'
-    + '<span class="filter-label">&#128197; Date Range</span>'
+  const isRecvFiltered = state.recvDateFrom || state.recvDateTo;
+  const filterBar = '<div class="filter-bar" style="flex-wrap:wrap;gap:6px 12px;">'
+    + '<span class="filter-label">&#128197; Raised On</span>'
     + '<input type="date" class="filter-date" id="flt-from" value="' + (state.dateFrom||'') + '" onchange="setDateFrom(this.value)" title="From date">'
     + '<span class="filter-sep">&#8594;</span>'
     + '<input type="date" class="filter-date" id="flt-to" value="' + (state.dateTo||'') + '" onchange="setDateTo(this.value)" title="To date">'
-    + (isFiltered ? '<button class="btn btn-sm btn-ghost" onclick="clearDateFilter()" style="color:var(--red);border-color:rgba(163,45,45,0.25);" title="Clear date filter">&#10005; Clear</button>' : '')
-    + '<span class="filter-result">Showing <strong>' + filtered.length + '</strong> of <strong>' + state.orders.length + '</strong> orders</span>'
+    + (isFiltered ? '<button class="btn btn-sm btn-ghost" onclick="clearDateFilter()" style="color:var(--red);border-color:rgba(163,45,45,0.25);" title="Clear">&#10005;</button>' : '')
+    + '<span style="width:100%;height:0;border-top:1px dashed var(--border);margin:2px 0;"></span>'
+    + '<span class="filter-label" style="color:var(--green);">&#9989; Received On</span>'
+    + '<input type="date" class="filter-date" id="flt-recv-from" value="' + (state.recvDateFrom||'') + '" onchange="setRecvDateFrom(this.value)" title="Received from date">'
+    + '<span class="filter-sep">&#8594;</span>'
+    + '<input type="date" class="filter-date" id="flt-recv-to" value="' + (state.recvDateTo||'') + '" onchange="setRecvDateTo(this.value)" title="Received to date">'
+    + (isRecvFiltered ? '<button class="btn btn-sm btn-ghost" onclick="clearRecvDateFilter()" style="color:var(--red);border-color:rgba(163,45,45,0.25);" title="Clear received date filter">&#10005;</button>' : '')
+    + '<span class="filter-result" style="margin-left:auto;">Showing <strong>' + filtered.length + '</strong> of <strong>' + state.orders.length + '</strong> orders</span>'
     + '</div>';
 
   const fbConfigMissing = !window._firestoreReady;
@@ -2094,6 +2109,9 @@ function showMsgBox(title, msg, type) {
 function setDateFrom(val) { state.dateFrom = val; render(); }
 function setDateTo(val) { state.dateTo = val; render(); }
 function clearDateFilter() { state.dateFrom = ''; state.dateTo = ''; render(); }
+function setRecvDateFrom(val) { state.recvDateFrom = val; render(); }
+function setRecvDateTo(val) { state.recvDateTo = val; render(); }
+function clearRecvDateFilter() { state.recvDateFrom = ''; state.recvDateTo = ''; render(); }
 
 // ── EXPOSE TO FIREBASE MODULE ──
 window._state = state;
