@@ -1310,9 +1310,10 @@ function renderList() {
             : !o.step3
             ? '<button class="btn btn-sm btn-success" onclick="goStep3(\'' + o.id + '\')">+ Step 3</button>'
             : '<span style="font-size:12px;color:var(--green);font-weight:600;">&#10003; Complete</span>');
-        const s1Locked = !!(o.step2 || o.step3 || o.cancelled);
-        const s2Locked = !!o.step3;
-        const s3Locked = !!o.step3;
+        const isAdmin = state.adminLoggedIn;
+        const s1Locked = !isAdmin && !!(o.step2 || o.step3 || o.cancelled);
+        const s2Locked = !isAdmin && !!o.step3;
+        const s3Locked = !isAdmin && !!o.step3;
         const lockIcon = '<span title="Locked" style="display:inline-flex;align-items:center;padding:0 8px;height:28px;font-size:12px;border-radius:7px;color:var(--text-hint);border:1px solid var(--border);background:var(--surface2);cursor:not-allowed;">&#128274;</span>';
         const editS1 = isViewOnly ? '' : (s1Locked ? lockIcon : '<button class="btn btn-sm btn-edit btn-ghost" onclick="goEditStep1(\'' + o.id + '\')" title="Edit Step 1">&#9998; S1</button>');
         const editS2 = isViewOnly ? '' : (o.step2 ? (s2Locked ? lockIcon : '<button class="btn btn-sm btn-edit btn-ghost" onclick="goEditStep2(\'' + o.id + '\')" title="Edit Step 2">&#9998; S2</button>') : '');
@@ -2075,9 +2076,9 @@ function renderViewModal(id) {
   }
 
   // Lock rules in modal
-  const s1ModalLocked = !!(o.step2 || o.step3 || o.cancelled);
-  const s2ModalLocked = !!o.step3;
-  const s3ModalLocked = !!o.step3;
+  const s1ModalLocked = !state.adminLoggedIn && !!(o.step2 || o.step3 || o.cancelled);
+  const s2ModalLocked = !state.adminLoggedIn && !!o.step3;
+  const s3ModalLocked = !state.adminLoggedIn && !!o.step3;
   const lockedNote = '<span style="font-size:11px;color:var(--text-hint);margin-left:auto;display:inline-flex;align-items:center;gap:3px;">&#128274; Locked</span>';
 
   return '<div class="modal-overlay" onclick="if(event.target===this)closeModal()">'
@@ -2162,24 +2163,24 @@ function goStep3(id) {
   state.editId=id; state.view='step3'; render();
 }
 function goEditStep1(id) {
-  if (!state.loggedInEmployee) { showMsgBox('Login Required', 'Please login to edit orders.', 'error'); return; }
+  if (!state.loggedInEmployee && !state.adminLoggedIn) { showMsgBox('Login Required', 'Please login to edit orders.', 'error'); return; }
   const o = state.orders.find(x => x.id === id);
-  if (o && (o.step2 || o.step3 || o.cancelled)) {
+  if (!state.adminLoggedIn && o && (o.step2 || o.step3 || o.cancelled)) {
     showMsgBox('Locked', 'Step 1 cannot be edited because Step 2 has already been completed.', 'error'); return;
   }
   state.editId=id; state.view='step1edit'; render();
 }
 function goEditStep2(id) {
-  if (!state.loggedInEmployee) { showMsgBox('Login Required', 'Please login to edit orders.', 'error'); return; }
+  if (!state.loggedInEmployee && !state.adminLoggedIn) { showMsgBox('Login Required', 'Please login to edit orders.', 'error'); return; }
   const o = state.orders.find(x => x.id === id);
-  if (o && o.step3) {
+  if (!state.adminLoggedIn && o && o.step3) {
     showMsgBox('Locked', 'Step 2 cannot be edited because Step 3 (Receiving) has already been completed.', 'error'); return;
   }
   state.editId=id; state.view='step2edit'; render();
 }
 function goEditStep3(id) {
   const o = state.orders.find(x => x.id === id);
-  if (o && o.step3) {
+  if (!state.adminLoggedIn && o && o.step3) {
     showMsgBox('Locked', 'This order is fully complete. No further edits are allowed once Step 3 is done.', 'error'); return;
   }
   state.editId=id; state.view='step3edit'; render();
