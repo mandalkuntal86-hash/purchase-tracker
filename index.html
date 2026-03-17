@@ -1237,6 +1237,18 @@ function genId() {
   return prefix + String(next).padStart(4, '0');
 }
 function today() { return new Date().toISOString().split('T')[0]; }
+function dayDiff(dateA, dateB) {
+  // Returns number of days between two YYYY-MM-DD strings (dateB - dateA)
+  if (!dateA || !dateB) return null;
+  var a = new Date(dateA), b = new Date(dateB);
+  if (isNaN(a) || isNaN(b)) return null;
+  return Math.round((b - a) / 86400000);
+}
+function dayBadge(days, label, color, bg) {
+  if (days === null) return '';
+  var txt = days === 0 ? 'Same day' : days === 1 ? '1 day' : days + ' days';
+  return '<span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:600;padding:2px 7px;border-radius:20px;background:' + bg + ';color:' + color + ';margin-top:3px;white-space:nowrap;">&#9201; ' + txt + ' ' + label + '</span>';
+}
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
 function getStatus(o) {
@@ -1326,11 +1338,29 @@ function renderList() {
           : '';
         // Smart date column per tab
         var smartDate;
-        if (state.tab === 'ordered') {
-          smartDate = o.step2 && !o.step2.mergedInto ? '<span style="color:var(--blue);font-weight:600;font-size:13px;">&#128197; ' + esc(o.step2.orderDate) + '</span>' : '<span style="color:var(--text-hint);font-size:12px;">—</span>';
+        if (state.tab === 'pending') {
+          // Days pending = today minus raise date
+          var pendingDays = dayDiff(o.step1.date, today());
+          var pendingColor = pendingDays !== null && pendingDays > 7 ? '#A32D2D' : '#854F0B';
+          var pendingBg   = pendingDays !== null && pendingDays > 7 ? '#FCEBEB' : '#FAEEDA';
+          smartDate = '<span style="color:var(--text-secondary);font-size:13px;">&#128197; ' + esc(o.step1.date) + '</span>'
+            + '<br>' + dayBadge(pendingDays, 'pending', pendingColor, pendingBg);
+        } else if (state.tab === 'ordered') {
+          // Days to order = order date minus raise date
+          var orderDays = o.step2 && !o.step2.mergedInto ? dayDiff(o.step1.date, o.step2.orderDate) : null;
+          smartDate = o.step2 && !o.step2.mergedInto
+            ? '<span style="color:var(--blue);font-weight:600;font-size:13px;">&#128197; ' + esc(o.step2.orderDate) + '</span>'
+              + '<br>' + dayBadge(orderDays, 'to order', '#185FA5', '#E6F1FB')
+            : '<span style="color:var(--text-hint);font-size:12px;">—</span>';
         } else if (state.tab === 'received') {
-          smartDate = o.step3 ? '<span style="color:var(--green);font-weight:600;font-size:13px;">&#128197; ' + esc(o.step3.receivedDate) + '</span>' : '<span style="color:var(--text-hint);font-size:12px;">—</span>';
+          // Days to receive = received date minus order date
+          var recvDays = o.step3 && o.step2 && !o.step2.mergedInto ? dayDiff(o.step2.orderDate, o.step3.receivedDate) : null;
+          smartDate = o.step3
+            ? '<span style="color:var(--green);font-weight:600;font-size:13px;">&#128197; ' + esc(o.step3.receivedDate) + '</span>'
+              + '<br>' + dayBadge(recvDays, 'to receive', '#0F6E56', '#E1F5EE')
+            : '<span style="color:var(--text-hint);font-size:12px;">—</span>';
         } else {
+          // All tab — show all dates stacked
           smartDate = '<span style="color:var(--text-secondary);font-size:13px;">&#128197; ' + esc(o.step1.date) + '</span>'
             + (o.step2 && !o.step2.mergedInto ? '<br><span style="color:var(--blue);font-size:11px;">&#128230; ' + esc(o.step2.orderDate) + '</span>' : '')
             + (o.step3 ? '<br><span style="color:var(--green);font-size:11px;">&#9989; ' + esc(o.step3.receivedDate) + '</span>' : '');
@@ -1355,6 +1385,9 @@ function renderList() {
           + '<span class="order-card-date">&#128197; Raised: ' + esc(o.step1.date) + '</span>'
           + (o.step2 && !o.step2.mergedInto ? '<span style="font-size:12px;color:var(--blue);font-weight:600;margin-left:8px;">&#128230; Ordered: ' + esc(o.step2.orderDate) + '</span>' : '')
           + (o.step3 ? '<span style="font-size:12px;color:var(--green);font-weight:600;margin-left:8px;">&#9989; Received: ' + esc(o.step3.receivedDate) + '</span>' : '')
+          + (state.tab==='pending' ? ' ' + dayBadge(dayDiff(o.step1.date, today()), 'pending', dayDiff(o.step1.date,today())>7?'#A32D2D':'#854F0B', dayDiff(o.step1.date,today())>7?'#FCEBEB':'#FAEEDA') : '')
+          + (state.tab==='ordered' && o.step2 && !o.step2.mergedInto ? ' ' + dayBadge(dayDiff(o.step1.date, o.step2.orderDate), 'to order', '#185FA5', '#E6F1FB') : '')
+          + (state.tab==='received' && o.step3 && o.step2 ? ' ' + dayBadge(dayDiff(o.step2.orderDate, o.step3.receivedDate), 'to receive', '#0F6E56', '#E1F5EE') : '')
           + '</div>'
           + '<div class="order-card-actions">'
           + nextBtn
