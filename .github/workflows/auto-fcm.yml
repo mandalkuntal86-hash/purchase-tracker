@@ -3,6 +3,7 @@ name: Auto FCM from Firestore
 on:
   schedule:
     - cron: '*/5 * * * *'
+  workflow_dispatch:
 
 jobs:
   check-and-notify:
