@@ -37,6 +37,8 @@ if (!CONFIG_FILLED) {
     const { initializeApp } = await import('https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js');
     const { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, getDoc }
       = await import('https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js');
+    const { getMessaging, getToken, onMessage }
+      = await import('https://www.gstatic.com/firebasejs/11.6.0/firebase-messaging.js');
 
     const app = initializeApp(FIREBASE_CONFIG);
     const db  = getFirestore(app);
@@ -44,6 +46,63 @@ if (!CONFIG_FILLED) {
     window._firestoreReady = true;
     // Refresh UI now that Firebase is connected
     if (window._render) window._render();
+
+    // ── FCM Setup ──
+    // VAPID key from Firebase Console → Project Settings → Cloud Messaging → Web Push certificates
+    const VAPID_KEY = 'BPmTsy5-ZLlVdc2MBKJSmaY7wcu1uvFgiNWA2gQ5yPb6PY9zi_WNWr_505Rcpcn4EIYOnWt8lNMwC4NP9anFjNU';
+
+    async function initFCM() {
+      try {
+        if (!('serviceWorker' in navigator)) return;
+        // Works on both GitHub Pages (subfolder) and root hosting
+        const swPath = (location.pathname.replace(/\/[^/]*$/, '') || '') + '/firebase-messaging-sw.js';
+        const reg = await navigator.serviceWorker.register(swPath, { scope: swPath.replace('firebase-messaging-sw.js', '') });
+        const messaging = getMessaging(app);
+
+        // Request permission
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') { console.log('Notification permission denied'); return; }
+
+        // Get FCM token
+        const token = await getToken(messaging, { vapidKey: VAPID_KEY, serviceWorkerRegistration: reg });
+        if (token) {
+          console.log('FCM Token:', token);
+          // Save token to Firestore so Cloud Functions can send to all devices
+          const deviceId = localStorage.getItem('pt_device_id') || ('dev_' + Math.random().toString(36).slice(2));
+          localStorage.setItem('pt_device_id', deviceId);
+          await setDoc(doc(db, 'fcm_tokens', deviceId), {
+            token,
+            updatedAt: new Date().toISOString(),
+            employee: window._state && window._state.loggedInEmployee ? window._state.loggedInEmployee : 'unknown'
+          });
+          window._fcmToken = token;
+          window._fcmMessaging = messaging;
+          console.log('FCM token saved to Firestore ✓');
+
+          // Show in-app notification when app is open (foreground)
+          onMessage(messaging, function(payload) {
+            var n = payload.notification || {};
+            showInAppNotif(n.title || 'PurchaseTracker', n.body || '');
+          });
+        }
+      } catch(e) { console.warn('FCM init error:', e); }
+    }
+
+    window._initFCM = initFCM;
+
+    // ── Send FCM notification via Firestore trigger ──
+    // We write to 'notifications' collection; Cloud Function picks it up and fans out to all tokens
+    window._sendFCMNotification = async function(title, body) {
+      try {
+        const notifId = 'notif_' + Date.now();
+        await setDoc(doc(db, 'notifications', notifId), {
+          title,
+          body,
+          createdAt: new Date().toISOString(),
+          sentBy: window._state && window._state.loggedInEmployee ? window._state.loggedInEmployee : 'system'
+        });
+      } catch(e) { console.warn('Send notif error:', e); }
+    };
 
     // ── Save order ──
     window._fbSaveOrder = async function(order) {
@@ -184,6 +243,9 @@ if (!CONFIG_FILLED) {
 
     // Start sync immediately
     window._startFirestoreSync();
+
+    // Init FCM after a short delay (so app state is ready)
+    setTimeout(function(){ if(window._initFCM) window._initFCM(); }, 1500);
 
   } catch(e) {
     console.error('Firebase load error:', e);
@@ -2150,6 +2212,32 @@ function showMsgBox(title, msg, type) {
   document.getElementById('msg-ok').onclick = function(){ document.body.removeChild(overlay); };
 }
 
+// ── IN-APP FOREGROUND NOTIFICATION TOAST ──
+function showInAppNotif(title, body) {
+  var toast = document.createElement('div');
+  toast.style.cssText = [
+    'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);',
+    'background:#1A1917;color:#fff;border-radius:12px;',
+    'padding:12px 18px;max-width:360px;width:calc(100% - 2rem);',
+    'display:flex;align-items:flex-start;gap:12px;',
+    'box-shadow:0 6px 24px rgba(0,0,0,0.35);z-index:9999;',
+    'font-family:"DM Sans",sans-serif;animation:toastIn 0.3s ease;'
+  ].join('');
+  toast.innerHTML = '<div style="font-size:22px;line-height:1;">🔔</div>'
+    + '<div style="flex:1;"><div style="font-size:13px;font-weight:600;margin-bottom:2px;">' + title + '</div>'
+    + '<div style="font-size:12px;opacity:0.75;line-height:1.4;">' + body + '</div></div>'
+    + '<button onclick="this.parentElement.remove()" style="background:none;border:none;color:rgba(255,255,255,0.5);font-size:18px;cursor:pointer;line-height:1;padding:0 0 0 4px;">&times;</button>';
+  // Add animation style once
+  if (!document.getElementById('toast-style')) {
+    var s = document.createElement('style');
+    s.id = 'toast-style';
+    s.textContent = '@keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(16px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}';
+    document.head.appendChild(s);
+  }
+  document.body.appendChild(toast);
+  setTimeout(function(){ if(toast.parentElement) toast.remove(); }, 5000);
+}
+
 // ── DATE FILTER ACTIONS ──
 function setDateFrom(val) { state.dateFrom = val || ''; render(); }
 function setDateTo(val) { state.dateTo = val || ''; render(); }
@@ -2243,10 +2331,12 @@ function saveStep1(isEdit) {
     o.step1 = { productName, date, requestedBy: o.step1.requestedBy || requestedBy };
     save(o); state.view='list'; render();
     showMsgBox('Updated', 'Step 1 has been updated successfully.', 'success');
+    if (window._sendFCMNotification) window._sendFCMNotification('✏️ Step 1 Updated', o.id + ' — ' + productName + ' request updated by ' + requestedBy);
   } else {
     const newOrder = { id: genId(), step1: { productName, date, requestedBy }, step2: null, step3: null };
     state.orders.unshift(newOrder);
     save(newOrder); state.view='list'; render();
+    if (window._sendFCMNotification) window._sendFCMNotification('📋 New Purchase Request', newOrder.id + ' — ' + productName + ' requested by ' + requestedBy);
   }
 }
 
@@ -2305,8 +2395,12 @@ function saveStep2(isEdit) {
   state.view='list'; render();
   if (isEdit) {
     showMsgBox('Updated', 'Step 2 has been updated successfully.', 'success');
+    if (window._sendFCMNotification) window._sendFCMNotification('✏️ Order Updated', o.id + ' — ' + (o.step1&&o.step1.productName||'') + ' order details updated by ' + orderedBy);
   } else if (mergedCount > 0) {
     showMsgBox('Order Saved', 'Order details saved. ' + mergedCount + ' additional purchase request' + (mergedCount > 1 ? 's were' : ' was') + ' bundled into this order.', 'success');
+    if (window._sendFCMNotification) window._sendFCMNotification('🛒 Order Placed', o.id + ' — ' + (o.step1&&o.step1.productName||'') + ' ordered from ' + vendor + ' (+' + mergedCount + ' bundled)');
+  } else {
+    if (window._sendFCMNotification) window._sendFCMNotification('🛒 Order Placed', o.id + ' — ' + (o.step1&&o.step1.productName||'') + ' ordered from ' + vendor + ' by ' + orderedBy);
   }
 }
 
@@ -2322,7 +2416,12 @@ function saveStep3(isEdit) {
   const o = state.orders.find(x => x.id === state.editId);
   o.step3 = { receivedBy, receivedDate, checkedBy, checkDate, invoiceNo, remarks };
   save(o); state.view='list'; render();
-  if (isEdit) showMsgBox('Updated', 'Step 3 has been updated successfully.', 'success');
+  if (isEdit) {
+    showMsgBox('Updated', 'Step 3 has been updated successfully.', 'success');
+    if (window._sendFCMNotification) window._sendFCMNotification('✏️ Receiving Updated', o.id + ' — ' + (o.step1&&o.step1.productName||'') + ' receiving info updated');
+  } else {
+    if (window._sendFCMNotification) window._sendFCMNotification('✅ Goods Received!', o.id + ' — ' + (o.step1&&o.step1.productName||'') + ' received by ' + receivedBy + '. Order complete!');
+  }
 }
 
 // ── DELETE ──
