@@ -95,12 +95,13 @@ if (!CONFIG_FILLED) {
     window._sendFCMNotification = async function(title, body) {
       try {
         const notifId = 'notif_' + Date.now();
-        await setDoc(doc(db, 'notifications', notifId), {
-          title,
-          body,
-          createdAt: new Date().toISOString(),
-          sentBy: window._state && window._state.loggedInEmployee ? window._state.loggedInEmployee : 'system'
-        });
+       await setDoc(doc(db, 'notifications', notifId), {
+  title,
+  body,
+  createdAt: new Date().toISOString(),
+  sentBy: window._state && window._state.loggedInEmployee ? window._state.loggedInEmployee : 'system',
+  sent: false
+});
       } catch(e) { console.warn('Send notif error:', e); }
     };
 
