@@ -1,0 +1,47 @@
+name: Auto FCM from Firestore
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+
+jobs:
+  check-and-notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check notifications and send FCM
+        run: |
+          npm install firebase-admin
+          node -e "
+          const admin = require('firebase-admin');
+          const sa = JSON.parse(process.env.SA);
+          admin.initializeApp({ credential: admin.credential.cert(sa) });
+          const db = admin.firestore();
+          const msg = admin.messaging();
+
+          async function run() {
+            const snap = await db.collection('notifications')
+              .where('sent', '==', false)
+              .orderBy('createdAt')
+              .limit(10)
+              .get();
+
+            if (snap.empty) { console.log('No pending notifications'); process.exit(0); }
+
+            const tokensSnap = await db.collection('fcm_tokens').get();
+            const tokens = [];
+            tokensSnap.forEach(d => { if(d.data().token) tokens.push(d.data().token); });
+
+            if (tokens.length === 0) { console.log('No tokens'); process.exit(0); }
+
+            for (const doc of snap.docs) {
+              const { title, body } = doc.data();
+              await msg.sendEachForMulticast({ notification: { title, body }, tokens });
+              await doc.ref.update({ sent: true });
+              console.log('Sent:', title);
+            }
+            process.exit(0);
+          }
+          run().catch(e => { console.error(e); process.exit(1); });
+          "
+        env:
+          SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
